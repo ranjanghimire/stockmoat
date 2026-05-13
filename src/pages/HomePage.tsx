@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   ANALYSIS_CACHE_MAX_ENTRIES,
   ANALYSIS_CACHE_TTL_MS,
@@ -20,6 +21,8 @@ import { fetchYahooCompanyPackDev } from '../lib/yahoo/fetchYahooCompanyPackDev'
 import { loadSectorProfiles } from '../lib/loadSectorProfiles'
 import { createLiveMetricEvaluator } from '../lib/liveMetricEvaluator'
 import { resolveProfileMetrics } from '../lib/resolveProfileMetrics'
+import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
+import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
 import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
 import { MetricTable } from '../components/MetricTable'
 import { PillarBars } from '../components/PillarBars'
@@ -39,11 +42,19 @@ function formatAutoMappedProfileLabel(a: MoatAnalysis): string {
     : formatProfileId(a.profileId)
 }
 
+function readTickerQuery(): string {
+  if (typeof window === 'undefined') return 'MSFT'
+  const raw = new URLSearchParams(window.location.search).get('ticker')?.trim().toUpperCase()
+  if (raw && /^[A-Z0-9.-]{1,12}$/.test(raw)) return raw
+  return 'MSFT'
+}
+
 export default function HomePage() {
-  const [tickerInput, setTickerInput] = useState('MSFT')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tickerInput, setTickerInput] = useState(readTickerQuery)
   const [profileMode, setProfileMode] = useState<'auto' | 'manual'>('auto')
   const [manualProfile, setManualProfile] = useState<string>('consumer_staples_discretionary_general')
-  const [submitted, setSubmitted] = useState('MSFT')
+  const [submitted, setSubmitted] = useState(readTickerQuery)
 
   const [analysis, setAnalysis] = useState<MoatAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
@@ -51,6 +62,16 @@ export default function HomePage() {
   const [fromCache, setFromCache] = useState(false)
   const [selectedPillar, setSelectedPillar] = useState<string | null>(null)
   const analysisCacheRef = useRef(new Map<string, AnalysisCacheEntry>())
+
+  const tickerFromParams = searchParams.get('ticker')?.trim().toUpperCase() ?? ''
+  useEffect(() => {
+    if (!tickerFromParams || !/^[A-Z0-9.-]{1,12}$/.test(tickerFromParams)) return
+    const id = window.setTimeout(() => {
+      setTickerInput((prev) => (prev === tickerFromParams ? prev : tickerFromParams))
+      setSubmitted((prev) => (prev === tickerFromParams ? prev : tickerFromParams))
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [tickerFromParams])
 
   useEffect(() => {
     const id = window.setTimeout(() => setSelectedPillar(null), 0)
@@ -169,7 +190,9 @@ export default function HomePage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    setSubmitted(tickerInput.trim().toUpperCase() || 'MSFT')
+    const sym = tickerInput.trim().toUpperCase() || 'MSFT'
+    setSubmitted(sym)
+    setSearchParams({ ticker: sym }, { replace: true })
   }
 
   return (
@@ -316,6 +339,7 @@ export default function HomePage() {
               sector={analysis.sector}
               industry={analysis.industry}
             />
+            {analysis.fundamentals ? <FundamentalsSummaryCard fundamentals={analysis.fundamentals} /> : null}
             <PillarBars
               analysis={analysis}
               selectedPillar={selectedPillar}
@@ -324,6 +348,9 @@ export default function HomePage() {
             <PillarDetailPanel analysis={analysis} pillar={selectedPillar} onClose={() => setSelectedPillar(null)} />
             {analysis.fundamentals?.incomeCharts ? (
               <IncomeFundamentalCharts charts={analysis.fundamentals.incomeCharts} />
+            ) : null}
+            {analysis.fundamentals?.balanceCharts ? (
+              <BalanceFundamentalCharts charts={analysis.fundamentals.balanceCharts} />
             ) : null}
             <MetricTable analysis={analysis} />
           </>

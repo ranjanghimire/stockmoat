@@ -21,6 +21,7 @@ export interface CompanyRawPack {
   incomeTtm: JsonRecord | undefined
   cashFlowTtm: JsonRecord | undefined
   balanceSheetAnnual: JsonRecord[]
+  balanceSheetQuarterly: JsonRecord[]
   analystEstimates: JsonRecord[]
   score: JsonRecord | undefined
   peers: string[]
@@ -128,6 +129,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     incomeTtmRaw,
     cfTtmRaw,
     bsRaw,
+    bsQuarterlyRaw,
     analystRaw,
   ] = await Promise.all([
     fmpGet<unknown>(`/stable/profile?symbol=${q}`, apiKey),
@@ -152,6 +154,10 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     fmpGet<unknown>(`/stable/cash-flow-statement-ttm?symbol=${q}`, apiKey).catch(() => null),
     fmpGet<unknown>(
       `/stable/balance-sheet-statement?symbol=${q}&period=annual&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
+      apiKey,
+    ).catch(() => null),
+    fmpGet<unknown>(
+      `/stable/balance-sheet-statement?symbol=${q}&period=quarter&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
       apiKey,
     ).catch(() => null),
     fmpGet<unknown>(
@@ -193,6 +199,10 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
   const incomeTtmArr = asArray<JsonRecord>(incomeTtmRaw)
   const cfTtmArr = asArray<JsonRecord>(cfTtmRaw)
   const bsArr = bsRaw === null ? [] : asArray<JsonRecord>(bsRaw)
+  const bsQuarterlyArr =
+    bsQuarterlyRaw === null || fmpPayloadHasErrorMessage(bsQuarterlyRaw)
+      ? []
+      : asArray<JsonRecord>(bsQuarterlyRaw)
   const analystArr = analystRaw === null ? [] : asArray<JsonRecord>(analystRaw)
 
   return {
@@ -206,6 +216,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     incomeTtm: firstRow(incomeTtmArr),
     cashFlowTtm: firstRow(cfTtmArr),
     balanceSheetAnnual: bsArr,
+    balanceSheetQuarterly: bsQuarterlyArr,
     analystEstimates: analystArr,
     score,
     peers,
