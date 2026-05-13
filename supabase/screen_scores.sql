@@ -1,0 +1,7 @@
+-- Source of truth for `screen_scores` is the versioned migration:
+--   supabase/migrations/20260512120000_screen_scores.sql
+--
+-- Apply to a linked project: from repo root, run:
+--   npx supabase db push
+--
+-- Or open that migration file in the Supabase SQL editor and run it once.

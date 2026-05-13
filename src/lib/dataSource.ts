@@ -17,3 +17,18 @@ export function shouldFetchFmpPeerMedians(): boolean {
   if (import.meta.env.PROD) return true
   return import.meta.env.VITE_FMP_FETCH_PEERS !== 'false'
 }
+
+/**
+ * FMP peer medians when the pipeline runs outside the Vite client (e.g. nightly Node script).
+ * Peers on by default; set `SCREEN_FETCH_PEERS=false` to skip extra calls.
+ */
+export function defaultFetchPeersForFmpPipeline(): boolean {
+  const env = typeof import.meta !== 'undefined' ? import.meta.env : undefined
+  if (env && typeof env.DEV === 'boolean') {
+    return shouldFetchFmpPeerMedians()
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.SCREEN_FETCH_PEERS !== 'false'
+  }
+  return true
+}
