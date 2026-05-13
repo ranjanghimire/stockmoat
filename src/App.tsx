@@ -15,6 +15,7 @@ import { fetchCompanyRawPack } from './lib/fmp/fetchCompanyRawPack'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from './lib/fmp/peerMedians'
 import { getFmpApiKey } from './lib/fmp/http'
 import { mapFmpSectorToProfile } from './lib/fmp/mapSectorToProfile'
+import { buildMoatFundamentalsSnapshot } from './lib/moatFundamentalsSnapshot'
 import { fetchYahooCompanyPackDev } from './lib/yahoo/fetchYahooCompanyPackDev'
 import { loadSectorProfiles } from './lib/loadSectorProfiles'
 import { createLiveMetricEvaluator } from './lib/liveMetricEvaluator'
@@ -132,6 +133,7 @@ export default function App() {
           sector: facts.sector,
           industry: facts.industry,
           dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
+          fundamentals: buildMoatFundamentalsSnapshot(facts),
         },
       )
 
@@ -172,8 +174,8 @@ export default function App() {
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
               Single-ticker view powered by your sector YAML. In <span className="font-medium">dev</span>, defaults
               to <span className="font-medium">Financial Modeling Prep</span> when <span className="font-mono">fmpApiKey</span> is in{' '}
-              <span className="font-mono">.env.local</span> (peer medians off unless{' '}
-              <span className="font-mono">VITE_FMP_FETCH_PEERS=true</span>). Optional:{' '}
+              <span className="font-mono">.env.local</span> (peer medians load in dev by default; set{' '}
+              <span className="font-mono">VITE_FMP_FETCH_PEERS=false</span> to skip). Optional:{' '}
               <span className="font-mono">VITE_USE_YAHOO=true</span> uses the <span className="font-medium">yahoo-finance2</span>{' '}
               Node package (not Python yfinance) via one Vite server call — Yahoo may rate-limit.
             </p>
@@ -315,9 +317,10 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white/60 py-6 text-center text-xs text-slate-500 backdrop-blur">
-        Client keeps a small in-memory analysis cache (10 min) per ticker/profile; use Refresh to bypass. Dev uses FMP when a key is present; optional Yahoo (<span className="font-mono">VITE_USE_YAHOO=true</span>) uses
-        yahoo-finance2 on the Vite dev server. Production builds use FMP when <span className="font-mono">fmpApiKey</span>{' '}
-        is set at build time. Prefer a backend proxy so keys stay off public bundles.
+        Client keeps a small in-memory analysis cache (10 min) per ticker/profile; use Refresh to bypass. FMP peer
+        medians load in dev by default (<span className="font-mono">VITE_FMP_FETCH_PEERS=false</span> to skip). Optional Yahoo (
+        <span className="font-mono">VITE_USE_YAHOO=true</span>) uses yahoo-finance2 on the Vite dev server. Production builds use FMP when{' '}
+        <span className="font-mono">fmpApiKey</span> is set at build time. Prefer a backend proxy so keys stay off public bundles.
       </footer>
     </div>
   )

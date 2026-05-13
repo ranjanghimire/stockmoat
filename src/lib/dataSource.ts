@@ -10,10 +10,10 @@ export function isYahooDevProvider(): boolean {
 }
 
 /**
- * FMP peer key-metrics calls are skipped in dev unless `VITE_FMP_FETCH_PEERS=true`
- * (avoids dozens of extra requests while iterating locally).
+ * FMP peer key-metrics: **on** in production. In dev, **on by default** so peer-relative
+ * lines get real medians; set `VITE_FMP_FETCH_PEERS=false` in `.env.local` to skip extra calls.
  */
 export function shouldFetchFmpPeerMedians(): boolean {
   if (import.meta.env.PROD) return true
-  return import.meta.env.VITE_FMP_FETCH_PEERS === 'true'
+  return import.meta.env.VITE_FMP_FETCH_PEERS !== 'false'
 }

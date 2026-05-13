@@ -19,6 +19,10 @@ export function PillarBars({ analysis, selectedPillar, onSelectPillar }: PillarB
         {ordered.map((p) => {
           const ratio = p.weight > 0 ? Math.min(1, p.contribution / p.weight) : 0
           const pct = Math.round(ratio * 100)
+          const pillarScore =
+            typeof p.pillarScore === 'number' && Number.isFinite(p.pillarScore)
+              ? p.pillarScore
+              : Math.round((1 + 9 * ratio) * 10) / 10
           const label = PILLAR_LABEL[p.pillar] ?? p.pillar
           const isSelected = selectedPillar === p.pillar
           return (
@@ -34,9 +38,16 @@ export function PillarBars({ analysis, selectedPillar, onSelectPillar }: PillarB
                   : 'border-slate-200/80 bg-white/70 hover:border-slate-300 hover:bg-white'
               }`}
             >
-              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <span className="text-moat-ink">{label}</span>
-                <span className="text-moat-accent-dim">{pct}%</span>
+                <span className="shrink-0 rounded-lg bg-white/90 px-2 py-1 font-display text-lg normal-case tracking-normal text-moat-ink shadow-inner">
+                  {pillarScore}
+                  <span className="text-xs font-sans font-medium text-slate-400">/10</span>
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Strength</span>
+                <span className="font-medium text-moat-accent-dim">{pct}%</span>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
                 <div
@@ -45,7 +56,7 @@ export function PillarBars({ analysis, selectedPillar, onSelectPillar }: PillarB
                 />
               </div>
               <p className="mt-2 text-[11px] leading-snug text-slate-500">
-                Pillar strength {(p.weight * 100).toFixed(0)}% of model weight
+                Pillar weight {(p.weight * 100).toFixed(0)}% of model · score uses this pillar’s lines only
               </p>
               <p className="mt-2 text-[10px] font-medium text-moat-accent-dim">
                 {isSelected ? 'Click again to collapse' : 'View metrics'}

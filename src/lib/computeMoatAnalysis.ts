@@ -1,3 +1,4 @@
+import type { MoatFundamentalsSnapshot } from './moatFundamentalsSnapshot'
 import { loadSectorProfiles, normalizeMetricWeights } from './loadSectorProfiles'
 import { metricLabel } from './metricLabels'
 import type { MetricEval } from './mockMetricDriver'
@@ -19,6 +20,8 @@ export interface PillarRollup {
   pillar: string
   weight: number
   contribution: number
+  /** Same 1–10 scale as headline score, using only this pillar’s lines (avg outcome vs pillar weight). */
+  pillarScore: number
 }
 
 export interface MoatAnalysis {
@@ -35,6 +38,8 @@ export interface MoatAnalysis {
   sector?: string
   industry?: string
   dataSource: 'fmp' | 'demo' | 'yahoo_dev'
+  /** TTM / BS figures for UI (cash-truth drill-down, etc.). */
+  fundamentals?: MoatFundamentalsSnapshot
 }
 
 export function computeMoatAnalysis(
@@ -44,7 +49,12 @@ export function computeMoatAnalysis(
   metricsInput: ProfileMetricDef[],
   itVariant: string | undefined,
   evaluateMetric: (m: ProfileMetricDef) => MetricEval,
-  meta?: { sector?: string; industry?: string; dataSource?: 'fmp' | 'demo' | 'yahoo_dev' },
+  meta?: {
+    sector?: string
+    industry?: string
+    dataSource?: 'fmp' | 'demo' | 'yahoo_dev'
+    fundamentals?: MoatFundamentalsSnapshot
+  },
 ): MoatAnalysis {
   const root = loadSectorProfiles()
   const metrics = normalizeMetricWeights(metricsInput)
@@ -98,11 +108,11 @@ export function computeMoatAnalysis(
     pillarMap.set(m.pillar, cur)
   }
 
-  const pillars: PillarRollup[] = [...pillarMap.entries()].map(([pillar, v]) => ({
-    pillar,
-    weight: v.weight,
-    contribution: v.contribution,
-  }))
+  const pillars: PillarRollup[] = [...pillarMap.entries()].map(([pillar, v]) => {
+    const strength = v.weight > 0 ? Math.min(1, Math.max(0, v.contribution / v.weight)) : 0
+    const pillarScore = Math.round((1 + 9 * strength) * 10) / 10
+    return { pillar, weight: v.weight, contribution: v.contribution, pillarScore }
+  })
 
   return {
     ticker,
@@ -118,5 +128,6 @@ export function computeMoatAnalysis(
     sector: meta?.sector,
     industry: meta?.industry,
     dataSource: meta?.dataSource ?? 'demo',
+    fundamentals: meta?.fundamentals,
   }
 }

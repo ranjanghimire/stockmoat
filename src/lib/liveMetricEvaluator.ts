@@ -42,7 +42,7 @@ function peerNoteFor(
   detail: string,
 ): string | undefined {
   if (!peerRelative) return undefined
-  if (!peers || peers.n === 0) return 'Peer multiples unavailable (FMP peers or key metrics missing).'
+  if (!peers || peers.n === 0) return undefined
   const tail = peers.n < 5 ? ' Low peer count; treat as directional only.' : ''
   return `${detail} (peer n=${peers.n}).${tail}`
 }
@@ -52,7 +52,10 @@ function peerValuationBreakdown(label: string, direction: 'lower' | 'higher'): s
     direction === 'lower'
       ? 'Lower vs peer median is treated as more attractive on this valuation-style measure.'
       : 'Higher vs peer median is treated as stronger on this profitability / growth-style measure.'
-  return [`${label}: ${hint}`, 'Peer medians are computed from FMP key-metrics TTM for the matched peer list.']
+  return [
+    `${label}: ${hint}`,
+    'Peer medians use FMP key-metrics TTM for matched peers when available; otherwise scoring uses a neutral mid-band for that line.',
+  ]
 }
 
 function ruleOf40Approx(facts: CompanyFacts): number | undefined {
@@ -128,11 +131,14 @@ export function createLiveMetricEvaluator(
 
     const lowerVsPeers = (label: string, subject?: number, med?: number): MetricEval => {
       const sub = scoreLowerVsMedian(subject, med)
+      const hasMed = med !== undefined && Number.isFinite(med) && med > 0
       return {
         id: m.id,
         subscore: sub,
         gatePass: true,
-        displayValue: `${label}: ${fmt(subject)} vs median ${fmt(med)}`,
+        displayValue: hasMed
+          ? `${label}: ${fmt(subject)} vs peer median ${fmt(med)}`
+          : `${label}: ${fmt(subject)} (peer median unavailable)`,
         peerNote: peerNoteFor(p, peerRel, `${label}: subject ${fmt(subject)} vs peer median ${fmt(med)}`),
         breakdown: peerValuationBreakdown(label, 'lower'),
       }
@@ -140,11 +146,14 @@ export function createLiveMetricEvaluator(
 
     const higherVsPeers = (label: string, subject?: number, med?: number): MetricEval => {
       const sub = scoreHigherVsMedian(subject, med)
+      const hasMed = med !== undefined && Number.isFinite(med)
       return {
         id: m.id,
         subscore: sub,
         gatePass: true,
-        displayValue: `${label}: ${fmt(subject)} vs median ${fmt(med)}`,
+        displayValue: hasMed
+          ? `${label}: ${fmt(subject)} vs peer median ${fmt(med)}`
+          : `${label}: ${fmt(subject)} (peer median unavailable)`,
         peerNote: peerNoteFor(p, peerRel, `${label}: subject ${fmt(subject)} vs peer median ${fmt(med)}`),
         breakdown: peerValuationBreakdown(label, 'higher'),
       }
@@ -382,6 +391,20 @@ export function createLiveMetricEvaluator(
 
       case 'ocf_to_ni_ttm': {
         const v = facts.ocfToNetIncome
+        const ocfAbs = facts.ocfTtmAbsolute
+        const niAbs = facts.niTtmAbsolute
+        let absLine: string | null = null
+        if (
+          ocfAbs !== undefined &&
+          niAbs !== undefined &&
+          Number.isFinite(ocfAbs) &&
+          Number.isFinite(niAbs) &&
+          Math.abs(niAbs) > 1e-9
+        ) {
+          const scale = Math.max(Math.abs(ocfAbs), Math.abs(niAbs)) >= 1e9 ? 1e9 : 1e6
+          const unit = scale >= 1e9 ? 'B' : 'M'
+          absLine = `TTM statements (USD): operating cash flow ≈ ${fmt(ocfAbs / scale, 2)}${unit} vs net income ≈ ${fmt(niAbs / scale, 2)}${unit} (rough scale).`
+        }
         if (v === undefined || !Number.isFinite(v)) {
           return {
             id: m.id,
@@ -391,6 +414,7 @@ export function createLiveMetricEvaluator(
             breakdown: [
               'OCF/NI prefers TTM cash-flow statement ÷ TTM net income when both absolute lines exist.',
               'Otherwise falls back to FMP “income quality / OCF ratio” style fields on key-metrics.',
+              ...(absLine ? [absLine] : []),
             ],
           }
         }
@@ -400,7 +424,11 @@ export function createLiveMetricEvaluator(
           subscore: sub,
           gatePass: true,
           displayValue: `${fmt(v, 2)}× (OCF / NI)`,
-          breakdown: [`OCF / net income ≈ ${fmt(v, 2)}×.`, 'Higher scores better (earnings backed by cash).'],
+          breakdown: [
+            `OCF / net income ≈ ${fmt(v, 2)}×.`,
+            'Higher scores better (earnings backed by cash).',
+            ...(absLine ? [absLine] : []),
+          ],
         }
       }
 

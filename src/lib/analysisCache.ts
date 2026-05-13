@@ -1,4 +1,5 @@
 import type { MoatAnalysis } from './computeMoatAnalysis'
+import { shouldFetchFmpPeerMedians } from './dataSource'
 
 export const ANALYSIS_CACHE_TTL_MS = 10 * 60 * 1000
 export const ANALYSIS_CACHE_MAX_ENTRIES = 32
@@ -13,10 +14,7 @@ export function analysisCacheKey(
   manualProfile: string,
 ): string {
   const profilePart = profileMode === 'manual' ? manualProfile : 'auto'
-  const peersOn =
-    !useYahoo && typeof import.meta.env !== 'undefined' && import.meta.env.VITE_FMP_FETCH_PEERS === 'true'
-      ? '1'
-      : '0'
+  const peersOn = !useYahoo && shouldFetchFmpPeerMedians() ? '1' : '0'
   return `${sym}|${useYahoo ? 'Y' : 'F'}|${profileMode}|${profilePart}|p${peersOn}`
 }
 
