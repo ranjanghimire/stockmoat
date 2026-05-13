@@ -68,7 +68,8 @@ export function yahooDevCompanyPlugin(): Plugin {
           }
 
           const now = Date.now()
-          const hit = cache.get(sym)
+          const bypassCache = url.searchParams.get('refresh') === '1' || url.searchParams.get('refresh') === 'true'
+          const hit = !bypassCache ? cache.get(sym) : undefined
           if (hit && hit.expires > now) {
             res.statusCode = 200
             res.setHeader('Content-Type', 'application/json')

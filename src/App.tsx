@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  ANALYSIS_CACHE_MAX_ENTRIES,
+  ANALYSIS_CACHE_TTL_MS,
+  analysisCacheKey,
+  type AnalysisCacheEntry,
+  readAnalysisCache,
+  writeAnalysisCache,
+} from './lib/analysisCache'
 import { computeMoatAnalysis, type MoatAnalysis } from './lib/computeMoatAnalysis'
 import { DEMO_TICKERS, PROFILE_ORDER } from './lib/demoTickerMap'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from './lib/dataSource'
@@ -31,8 +39,10 @@ export default function App() {
   const [analysis, setAnalysis] = useState<MoatAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fromCache, setFromCache] = useState(false)
+  const analysisCacheRef = useRef(new Map<string, AnalysisCacheEntry>())
 
-  const runAnalysis = useCallback(async () => {
+  const runAnalysis = useCallback(async (opts?: { forceRefresh?: boolean }) => {
     const sym = submitted.trim().toUpperCase() || 'MSFT'
     const useYahoo = isYahooDevProvider()
     const fmpKey = getFmpApiKey()
@@ -42,13 +52,33 @@ export default function App() {
         'Missing FMP API key. Add fmpApiKey=YOUR_KEY to .env.local and restart Vite (default dev path). Optional: set VITE_USE_YAHOO=true to try Yahoo via the yahoo-finance2 package (not Python yfinance) — Yahoo often rate-limits and may fail.',
       )
       setAnalysis(null)
+      setFromCache(false)
       return
     }
 
+    const cacheKey = analysisCacheKey(sym, useYahoo, profileMode, manualProfile)
+    if (!opts?.forceRefresh) {
+      const cached = readAnalysisCache(
+        analysisCacheRef.current,
+        cacheKey,
+        Date.now(),
+        ANALYSIS_CACHE_TTL_MS,
+      )
+      if (cached) {
+        setFromCache(true)
+        setAnalysis(cached)
+        setError(null)
+        return
+      }
+    }
+
+    setFromCache(false)
     setLoading(true)
     setError(null)
     try {
-      const pack = useYahoo ? await fetchYahooCompanyPackDev(sym) : await fetchCompanyRawPack(sym, fmpKey)
+      const pack = useYahoo
+        ? await fetchYahooCompanyPackDev(sym, { refresh: opts?.forceRefresh === true })
+        : await fetchCompanyRawPack(sym, fmpKey)
 
       const facts = buildCompanyFacts(sym, pack)
       const peerMedians = useYahoo
@@ -90,6 +120,12 @@ export default function App() {
         },
       )
 
+      writeAnalysisCache(
+        analysisCacheRef.current,
+        cacheKey,
+        { savedAt: Date.now(), analysis: result },
+        ANALYSIS_CACHE_MAX_ENTRIES,
+      )
       setAnalysis(result)
     } catch (e) {
       setAnalysis(null)
@@ -127,26 +163,43 @@ export default function App() {
               Node package (not Python yfinance) via one Vite server call — Yahoo may rate-limit.
             </p>
           </div>
-          <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
-            <label className="sr-only" htmlFor="ticker">
-              Ticker
-            </label>
-            <input
-              id="ticker"
-              value={tickerInput}
-              onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-              placeholder="TICKER"
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-lg tracking-widest shadow-inner shadow-slate-900/5 outline-none ring-moat-accent/30 focus:ring-2 md:w-44"
-              maxLength={8}
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-moat-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-moat-accent-dim disabled:cursor-wait disabled:opacity-70"
-            >
-              {loading ? 'Loading…' : 'Analyze'}
-            </button>
-          </form>
+          <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
+            <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3 md:flex-row md:items-center">
+              <label className="sr-only" htmlFor="ticker">
+                Ticker
+              </label>
+              <input
+                id="ticker"
+                value={tickerInput}
+                onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+                placeholder="TICKER"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-lg tracking-widest shadow-inner shadow-slate-900/5 outline-none ring-moat-accent/30 focus:ring-2 md:w-44"
+                maxLength={8}
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-xl bg-moat-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-moat-accent-dim disabled:cursor-wait disabled:opacity-70"
+              >
+                {loading ? 'Loading…' : 'Analyze'}
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void runAnalysis({ forceRefresh: true })}
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+                title="Bypass in-memory cache and refetch from Yahoo or FMP"
+              >
+                {loading ? 'Wait…' : 'Refresh'}
+              </button>
+            </form>
+            {fromCache ? (
+              <p className="max-w-md text-xs text-slate-500 md:text-right">
+                Showing in-memory cached analysis (same ticker & profile, up to{' '}
+                {Math.round(ANALYSIS_CACHE_TTL_MS / 60_000)} min). Use Refresh to pull fresh fundamentals.
+              </p>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -242,7 +295,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white/60 py-6 text-center text-xs text-slate-500 backdrop-blur">
-        Dev uses FMP when a key is present; optional Yahoo (<span className="font-mono">VITE_USE_YAHOO=true</span>) uses
+        Client keeps a small in-memory analysis cache (10 min) per ticker/profile; use Refresh to bypass. Dev uses FMP when a key is present; optional Yahoo (<span className="font-mono">VITE_USE_YAHOO=true</span>) uses
         yahoo-finance2 on the Vite dev server. Production builds use FMP when <span className="font-mono">fmpApiKey</span>{' '}
         is set at build time. Prefer a backend proxy so keys stay off public bundles.
       </footer>

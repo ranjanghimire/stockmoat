@@ -4,9 +4,14 @@ import type { CompanyRawPack } from '../fmp/fetchCompanyRawPack'
  * One browser round-trip → Vite dev middleware runs **`yahoo-finance2`** (Node) `quoteSummary` once
  * and returns a FMP-shaped `CompanyRawPack`. This is not Python **yfinance**; Yahoo may rate-limit.
  */
-export async function fetchYahooCompanyPackDev(symbol: string): Promise<CompanyRawPack> {
+export async function fetchYahooCompanyPackDev(
+  symbol: string,
+  options?: { refresh?: boolean },
+): Promise<CompanyRawPack> {
   const sym = symbol.trim().toUpperCase()
-  const res = await fetch(`/api/dev/yahoo-company?symbol=${encodeURIComponent(sym)}`)
+  const q = new URLSearchParams({ symbol: sym })
+  if (options?.refresh) q.set('refresh', '1')
+  const res = await fetch(`/api/dev/yahoo-company?${q.toString()}`)
   const text = await res.text()
   let body: unknown
   try {
