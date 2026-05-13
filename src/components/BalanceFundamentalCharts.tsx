@@ -56,7 +56,7 @@ export function BalanceFundamentalCharts({ charts }: BalanceFundamentalChartsPro
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/80 shadow-lg shadow-slate-900/5 backdrop-blur">
+    <section className="rounded-2xl border border-slate-200/80 bg-white/80 shadow-lg shadow-slate-900/5 backdrop-blur">
       <div className="flex flex-col gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="font-display text-xl text-moat-ink">Assets and liabilities</h3>
@@ -106,38 +106,46 @@ export function BalanceFundamentalCharts({ charts }: BalanceFundamentalChartsPro
             <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-700/85" /> Liabilities
           </span>
         </div>
-        <div className="flex h-40 items-end gap-1.5 sm:gap-2">
-          {points.map((p, i) => {
-            const a = hA[i] ?? 0
-            const l = hL[i] ?? 0
-            const barA = Math.max(0.25, (a / 100) * 9)
-            const barL = Math.max(0.25, (l / 100) * 9)
-            return (
-              <div key={`${p.date}-${p.label}-${i}`} className="flex h-40 min-w-0 flex-1 flex-col items-center justify-end gap-1">
-                <div className="flex h-36 w-full max-w-[4.5rem] items-end justify-center gap-0.5">
-                  <div
-                    className="w-1/2 max-w-[1.75rem] rounded-t-md bg-sky-600/90"
-                    style={{ height: `${barA}rem` }}
-                    title={`Assets ${formatUsd(p.totalAssets)}`}
-                  />
-                  <div
-                    className="w-1/2 max-w-[1.75rem] rounded-t-md bg-amber-700/85"
-                    style={{ height: `${barL}rem` }}
-                    title={`Liabilities ${formatUsd(p.totalLiabilities)}`}
-                  />
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <div className="flex min-w-max items-end justify-start gap-2 sm:gap-2.5">
+            {points.map((p, i) => {
+              const a = hA[i] ?? 0
+              const l = hL[i] ?? 0
+              const barA = Math.max(0.25, (a / 100) * 9)
+              const barL = Math.max(0.25, (l / 100) * 9)
+              return (
+                <div
+                  key={`${p.date}-${p.label}-${i}`}
+                  className="flex w-[4.75rem] shrink-0 flex-col items-center justify-end gap-0.5 pb-0.5"
+                >
+                  <div className="flex h-36 w-full items-end justify-center gap-0.5">
+                    <div
+                      className="w-1/2 max-w-[1.75rem] rounded-t-md bg-sky-600/90"
+                      style={{ height: `${barA}rem` }}
+                      title={`Assets ${formatUsd(p.totalAssets)}`}
+                    />
+                    <div
+                      className="w-1/2 max-w-[1.75rem] rounded-t-md bg-amber-700/85"
+                      style={{ height: `${barL}rem` }}
+                      title={`Liabilities ${formatUsd(p.totalLiabilities)}`}
+                    />
+                  </div>
+                  <span
+                    className="w-full whitespace-normal break-words text-center text-[10px] font-medium leading-tight text-slate-500"
+                    title={p.label}
+                  >
+                    {p.label || p.date.slice(0, 4)}
+                  </span>
+                  <span className="w-full whitespace-normal break-words text-center text-[9px] leading-tight text-slate-500">
+                    A {formatUsd(p.totalAssets)}
+                  </span>
+                  <span className="w-full whitespace-normal break-words text-center text-[9px] leading-tight text-slate-500">
+                    L {formatUsd(p.totalLiabilities)}
+                  </span>
                 </div>
-                <span className="max-w-full truncate text-center text-[10px] font-medium text-slate-500" title={p.label}>
-                  {p.label}
-                </span>
-                <span className="max-w-full truncate text-center text-[9px] leading-tight text-slate-500">
-                  A {formatUsd(p.totalAssets)}
-                </span>
-                <span className="max-w-full truncate text-center text-[9px] leading-tight text-slate-500">
-                  L {formatUsd(p.totalLiabilities)}
-                </span>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
     </section>

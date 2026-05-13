@@ -20,6 +20,7 @@ export function periodLabelFromStatementRow(row: JsonRecord): string {
   } else if (date.length >= 7 && !period) {
     label = date.slice(0, 7)
   }
+  if (!label.trim()) label = date.slice(0, 4)
   return label
 }
 
