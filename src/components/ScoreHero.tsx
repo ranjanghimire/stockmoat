@@ -42,12 +42,12 @@ export function ScoreHero({
             <span className="ml-3 text-2xl font-sans font-medium text-slate-500 md:text-3xl">{name}</span>
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-            Sector profile: <span className="font-medium text-moat-ink">{profileLabel}</span>. Data:{' '}
+            Sector profile: <span className="font-medium text-moat-ink">{profileLabel}</span>. <br />Data:{' '}
             <span className="font-medium text-moat-ink">{dataSourceLabel(dataSource)}</span>
             {sector ? (
               <>
                 {' '}
-                · Sector <span className="font-medium text-moat-ink">{sector}</span>
+                <br />Sector <span className="font-medium text-moat-ink">{sector}</span>
                 {industry ? (
                   <>
                     {' '}
@@ -56,7 +56,6 @@ export function ScoreHero({
                 ) : null}
               </>
             ) : null}
-            . Weights come from <span className="font-medium">config/sector_profiles.v1.yaml</span>.
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 md:items-end">
