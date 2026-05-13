@@ -14,7 +14,16 @@ function fmt(x: number | undefined, digits = 2): string {
 }
 
 function scoreLowerVsMedian(subject?: number, median?: number): number {
-  if (!subject || !median || subject <= 0 || median <= 0) return 0.45
+  if (
+    subject === undefined ||
+    median === undefined ||
+    !Number.isFinite(subject) ||
+    !Number.isFinite(median) ||
+    subject <= 0 ||
+    median <= 0
+  ) {
+    return 0.45
+  }
   const rel = subject / median
   if (rel <= 0.75) return 0.95
   if (rel <= 0.9) return 0.85
