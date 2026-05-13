@@ -114,6 +114,13 @@ function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
   return undefined
 }
 
+/** FMP often uses 0–1 decimals; some feeds use 0–100 “percent points”. */
+function normalizeMarginRatio(v: number | undefined): number | undefined {
+  if (v === undefined || !Number.isFinite(v)) return undefined
+  if (v > 1.25 && v <= 100) return v / 100
+  return v
+}
+
 function extractPiotroski(sc?: JsonRecord): number | undefined {
   if (!sc) return undefined
   const direct = num(sc.piotroskiScore, sc.piotroski, sc.score)
@@ -168,6 +175,11 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const incTtm = pack.incomeTtm
   const cfTtm = pack.cashFlowTtm
   const bs0 = pack.balanceSheetAnnual[0]
+  const incAnnual0 = pack.incomeAnnual[0]
+  const cfAnnual0 = pack.cashFlowAnnual[0]
+  /** TTM statements preferred; fall back to latest annual when TTM pack is empty (plan / endpoint gaps). */
+  const incSrc: JsonRecord | undefined = incTtm ?? incAnnual0
+  const cfSrc: JsonRecord | undefined = cfTtm ?? cfAnnual0
 
   const companyName = typeof p?.companyName === 'string' ? p.companyName : symbol.toUpperCase()
   const sector = sectorFromFmpProfile(p) ?? sectorFromFmpProfile(q) ?? 'Unknown'
@@ -216,9 +228,15 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const roic = pick(km, ['roic']) ?? pick(r, ['returnOnCapitalEmployed'])
   const operatingMargin = pick(km, ['operatingProfitMargin']) ?? pick(r, ['operatingProfitMargin'])
   const ebitdaMargin = pick(km, ['ebitdaMargin']) ?? pick(r, ['ebitdaMargin'])
-  const grossMargin = pick(km, ['grossProfitMargin']) ?? pick(r, ['grossProfitMargin'])
+  const grossMarginRaw =
+    pick(km, ['grossProfitMargin']) ??
+    pick(r, ['grossProfitMargin']) ??
+    pick(incSrc, ['grossProfitRatio', 'grossProfitMargin'])
+  const grossMargin = normalizeMarginRatio(grossMarginRaw)
 
-  const netDebtToEbitda = pick(km, ['netDebtToEBITDA', 'netDebtToEbitda']) ?? pick(r, ['netDebtToEBITDA'])
+  let netDebtToEbitda =
+    pick(km, ['netDebtToEBITDA', 'netDebtToEbitda', 'netDebtToEBITDATTM']) ??
+    pick(r, ['netDebtToEBITDA', 'netDebtToEbitda'])
   const interestCoverage = pick(r, ['interestCoverage']) ?? pick(km, ['interestCoverage'])
   const debtToEquity = pick(r, ['debtEquityRatio', 'debtToEquity']) ?? pick(km, ['debtToEquity'])
 
@@ -230,8 +248,13 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const operatingCashFlowTtm = pick(km, ['operatingCashFlowPerShareTTM'])
   const netIncomeTtm = pick(km, ['netIncomePerShareTTM'])
   const freeCashFlowTtm = pick(km, ['freeCashFlowPerShareTTM'])
-  const revenueTtmTotal = pick(km, ['revenue']) ?? pick(km, ['revenuePerShareTTM'])
-  const revenueTtm = revenueTtmTotal
+  /** Company-level revenue (USD). Avoid revenue-per-share here — it breaks EV / GP. */
+  const revenueTotalUsd =
+    pick(incSrc, ['revenue', 'sales', 'totalRevenue']) ??
+    pick(incAnnual0, ['revenue', 'sales', 'totalRevenue']) ??
+    pick(km, ['revenue', 'totalRevenue'])
+
+  const revenueTtm = revenueTotalUsd ?? pick(km, ['revenuePerShareTTM'])
 
   const ocfNiFromKm = pick(km, ['incomeQuality', 'operatingCashFlowRatio'])
   let ocfToNetIncome: number | undefined
@@ -239,30 +262,48 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     ocfToNetIncome = ocfNiFromKm
   }
 
-  const ocfAbs = pick(cfTtm, ['operatingCashFlow', 'netCashProvidedByOperatingActivities'])
-  const niAbs = pick(incTtm, ['netIncome'])
-  const fcfAbs = pick(cfTtm, ['freeCashFlow'])
-  const capexRaw = pick(cfTtm, ['capitalExpenditure', 'investmentsInPropertyPlantAndEquipment'])
+  const ocfAbs = pick(cfSrc, [
+    'operatingCashFlow',
+    'netCashProvidedByOperatingActivities',
+    'totalCashFromOperatingActivities',
+    'cashFlowFromContinuingOperatingActivities',
+  ])
+  const niAbs = pick(incSrc, [
+    'netIncome',
+    'netIncomeCommonStockholders',
+    'netIncomeApplicableToCommonShares',
+    'netIncomeFromContinuingOperations',
+  ])
+  const fcfAbs = pick(cfSrc, ['freeCashFlow', 'freeCashFlowFromContinuingOperatingActivities'])
+  const capexRaw = pick(cfSrc, [
+    'capitalExpenditure',
+    'investmentsInPropertyPlantAndEquipment',
+    'purchaseOfPPE',
+    'capitalExpenditures',
+  ])
   const capexAbs = capexRaw !== undefined ? Math.abs(capexRaw) : undefined
-  const revAbs = pick(incTtm, ['revenue'])
-  const opEx = pick(incTtm, ['operatingExpenses', 'totalOperatingExpenses', 'sellingGeneralAndAdministrativeExpenses'])
-  const interestExp = pick(incTtm, ['interestExpense'])
-  const interestInc = pick(incTtm, ['interestIncome', 'interestIncomeExpense'])
+  const revAbs = pick(incSrc, ['revenue', 'sales', 'totalRevenue'])
+  const opEx = pick(incSrc, ['operatingExpenses', 'totalOperatingExpenses', 'sellingGeneralAndAdministrativeExpenses'])
+  const interestExp = pick(incSrc, ['interestExpense'])
+  const interestInc = pick(incSrc, ['interestIncome', 'interestIncomeExpense'])
 
   if (ocfAbs !== undefined && niAbs !== undefined && Math.abs(niAbs) > 1e-6) {
     ocfToNetIncome = ocfAbs / niAbs
   }
 
-  const grossProfitApprox =
-    revenueTtm !== undefined && grossMargin !== undefined ? revenueTtm * grossMargin : undefined
+  const grossProfitLine = pick(incSrc, ['grossProfit'])
+  let grossProfitApprox: number | undefined = grossProfitLine
+  if (grossProfitApprox === undefined && revenueTotalUsd !== undefined && grossMargin !== undefined) {
+    grossProfitApprox = revenueTotalUsd * grossMargin
+  }
   let enterpriseValueToGrossProfit: number | undefined
   if (enterpriseValue !== undefined && grossProfitApprox !== undefined && grossProfitApprox !== 0) {
     enterpriseValueToGrossProfit = enterpriseValue / grossProfitApprox
   }
 
   let enterpriseValueToRevenue: number | undefined
-  if (enterpriseValue !== undefined && revenueTtm !== undefined && revenueTtm !== 0) {
-    enterpriseValueToRevenue = enterpriseValue / revenueTtm
+  if (enterpriseValue !== undefined && revenueTotalUsd !== undefined && revenueTotalUsd !== 0) {
+    enterpriseValueToRevenue = enterpriseValue / revenueTotalUsd
   }
 
   const piotroski = extractPiotroski(sc)
@@ -280,6 +321,28 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const goodwill = pick(bs0, ['goodwill'])
   const intangibleAssets = pick(bs0, ['intangibleAssets', 'otherIntangibleAssets'])
   const deferredRevenue = pick(bs0, ['deferredRevenue', 'deferredTaxLiabilitiesNonCurrent'])
+
+  if (
+    (netDebtToEbitda === undefined || !Number.isFinite(netDebtToEbitda)) &&
+    totalDebtBs !== undefined &&
+    cashAndEquivalents !== undefined
+  ) {
+    let ebitdaTtm =
+      pick(incSrc, ['ebitda', 'EBITDA']) ??
+      pick(km, ['ebitda', 'EBITDA']) ??
+      pick(incAnnual0, ['ebitda', 'EBITDA'])
+    if (ebitdaTtm === undefined) {
+      const oi = pick(incSrc, ['operatingIncome'])
+      const da = pick(incSrc, ['depreciationAndAmortization', 'reconciledDepreciation'])
+      if (oi !== undefined && da !== undefined && Number.isFinite(oi) && Number.isFinite(da)) {
+        ebitdaTtm = oi + da
+      }
+    }
+    if (ebitdaTtm !== undefined && Math.abs(ebitdaTtm) > 1e-6) {
+      const netDebt = totalDebtBs - cashAndEquivalents
+      netDebtToEbitda = netDebt / ebitdaTtm
+    }
+  }
 
   let tangibleCommonEquityRatio: number | undefined
   if (totalAssets !== undefined && totalAssets > 0 && totalEquity !== undefined) {

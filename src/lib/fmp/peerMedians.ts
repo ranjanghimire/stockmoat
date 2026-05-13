@@ -38,7 +38,7 @@ function extractPeerRow(km?: JsonRecord) {
   if (!km) return undefined
   const enterpriseValue = pick(km, ['enterpriseValue'])
   const grossMargin = pick(km, ['grossProfitMargin'])
-  const revenue = pick(km, ['revenue']) ?? pick(km, ['revenuePerShareTTM'])
+  const revenue = pick(km, ['revenue', 'totalRevenue']) ?? pick(km, ['revenuePerShareTTM'])
   const grossProfitApprox =
     revenue !== undefined && grossMargin !== undefined ? revenue * grossMargin : undefined
   let enterpriseValueToGrossProfit: number | undefined
