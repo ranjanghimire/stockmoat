@@ -47,6 +47,14 @@ const fcfYieldPeerMetric: ProfileMetricDef = {
   peer_relative: true,
 }
 
+const evEbitMetric: ProfileMetricDef = {
+  id: 'ev_to_ebit_vs_peer',
+  pillar: 'valuation',
+  pillar_weight: 0.1,
+  mode: 'score',
+  peer_relative: true,
+}
+
 describe.skipIf(!fmpApiKey)('FMP peer valuation medians (integration)', () => {
   const apiKey = fmpApiKey
 
@@ -61,6 +69,8 @@ describe.skipIf(!fmpApiKey)('FMP peer valuation medians (integration)', () => {
     expect(medians.enterpriseValueToRevenue!).toBeGreaterThan(0)
     expect(medians.fcfYield).toBeDefined()
     expect(Number.isFinite(medians.fcfYield)).toBe(true)
+    expect(medians.evToEbit).toBeDefined()
+    expect(medians.evToEbit!).toBeGreaterThan(0)
   })
 
   it('live evaluator shows peer medians for MSFT EV/GP, EV/revenue, and FCF yield', async () => {
@@ -77,7 +87,7 @@ describe.skipIf(!fmpApiKey)('FMP peer valuation medians (integration)', () => {
     expect(facts.fcfYield).toBeDefined()
 
     const evaluate = createLiveMetricEvaluator('MSFT', facts, snapshot)
-    for (const m of [evGpMetric, evRevMetric, fcfYieldPeerMetric]) {
+    for (const m of [evGpMetric, evRevMetric, fcfYieldPeerMetric, evEbitMetric]) {
       const row = evaluate(m)
       expect(row.displayValue, m.id).toContain('vs peer median')
       expect(row.displayValue, m.id).not.toContain('peer median unavailable')
@@ -95,7 +105,7 @@ describe.skipIf(!fmpApiKey)('FMP peer valuation medians (integration)', () => {
     expect(snapshot?.fcfYield).toBeDefined()
 
     const evaluate = createLiveMetricEvaluator('AAPL', facts, snapshot)
-    for (const m of [evGpMetric, evRevMetric, fcfYieldPeerMetric]) {
+    for (const m of [evGpMetric, evRevMetric, fcfYieldPeerMetric, evEbitMetric]) {
       const row = evaluate(m)
       expect(row.displayValue, m.id).toContain('vs peer median')
       expect(row.displayValue, m.id).not.toContain('peer median unavailable')

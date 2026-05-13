@@ -249,15 +249,49 @@ function extractPeerRow(
     }
   }
 
+  const ebitForEv =
+    pick(km, ['ebit', 'EBIT', 'operatingIncome', 'operatingIncomeTTM']) ??
+    (incTtm && !fmpPayloadHasErrorMessage(incTtm)
+      ? pick(incTtm, ['ebit', 'EBIT', 'operatingIncome', 'operatingIncomeTTM'])
+      : undefined) ??
+    (ia ? pick(ia, ['ebit', 'EBIT', 'operatingIncome', 'operatingIncomeTTM']) : undefined)
+
   let evToEbit = pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM', 'evToEbit'])
-  const ebitKm = pick(km, ['ebit', 'operatingIncome', 'operatingIncomeTTM'])
   if (
     (evToEbit === undefined || !Number.isFinite(evToEbit)) &&
     enterpriseValue !== undefined &&
-    ebitKm !== undefined &&
-    Math.abs(ebitKm) > 1e-6
+    ebitForEv !== undefined &&
+    Math.abs(ebitForEv) > 1e-6
   ) {
-    evToEbit = enterpriseValue / ebitKm
+    evToEbit = enterpriseValue / ebitForEv
+  }
+
+  let evToEbitda = pick(km, ['enterpriseValueOverEBITDA', 'evToEBITDATTM', 'evToEBITDA'])
+  let ebitdaForEv =
+    pick(km, ['ebitda', 'EBITDA']) ??
+    (incTtm && !fmpPayloadHasErrorMessage(incTtm) ? pick(incTtm, ['ebitda', 'EBITDA']) : undefined) ??
+    (ia ? pick(ia, ['ebitda', 'EBITDA']) : undefined)
+  if (ebitdaForEv === undefined && incTtm && !fmpPayloadHasErrorMessage(incTtm)) {
+    const oi = pick(incTtm, ['operatingIncome', 'ebit', 'EBIT'])
+    const da = pick(incTtm, ['depreciationAndAmortization', 'reconciledDepreciation'])
+    if (oi !== undefined && da !== undefined && Number.isFinite(oi) && Number.isFinite(da)) {
+      ebitdaForEv = oi + da
+    }
+  }
+  if (ebitdaForEv === undefined && ia) {
+    const oi = pick(ia, ['operatingIncome', 'ebit', 'EBIT'])
+    const da = pick(ia, ['depreciationAndAmortization', 'reconciledDepreciation'])
+    if (oi !== undefined && da !== undefined && Number.isFinite(oi) && Number.isFinite(da)) {
+      ebitdaForEv = oi + da
+    }
+  }
+  if (
+    (evToEbitda === undefined || !Number.isFinite(evToEbitda)) &&
+    enterpriseValue !== undefined &&
+    ebitdaForEv !== undefined &&
+    Math.abs(ebitdaForEv) > 1e-6
+  ) {
+    evToEbitda = enterpriseValue / ebitdaForEv
   }
 
   let peTrailing = pick(km, ['peRatio', 'trailingPE', 'trailingPe'])
@@ -272,7 +306,7 @@ function extractPeerRow(
   }
 
   return {
-    evToEbitda: pick(km, ['enterpriseValueOverEBITDA', 'evToEBITDATTM']),
+    evToEbitda,
     evToEbit,
     fcfYield,
     roe,
