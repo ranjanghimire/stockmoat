@@ -45,12 +45,42 @@ function extractPeerRow(km?: JsonRecord) {
       revenue = rps * shOut
     }
   }
-  const grossMargin = normalizeMarginRatio(pick(km, ['grossProfitMargin']))
-  const grossProfitApprox =
-    revenue !== undefined && grossMargin !== undefined ? revenue * grossMargin : undefined
+
+  const totalDebtKm = pick(km, ['totalDebt'])
+  const cashKm = pick(km, ['cashAndCashEquivalents', 'cashAndShortTermInvestments', 'cash'])
+
+  const grossMargin = normalizeMarginRatio(
+    pick(km, ['grossProfitMargin', 'grossMargin', 'grossProfitRatio']),
+  )
+  const grossProfitDirect = pick(km, ['grossProfit', 'grossProfitTTM'])
+  let grossProfitApprox: number | undefined = grossProfitDirect
+  if (grossProfitApprox === undefined && revenue !== undefined && grossMargin !== undefined) {
+    grossProfitApprox = revenue * grossMargin
+  }
+  if (grossProfitApprox === undefined && revenue !== undefined) {
+    const cogs = pick(km, ['costOfRevenue', 'costOfGoodsSold', 'costOfSales', 'costOfGoodsAndServicesSold'])
+    if (cogs !== undefined && revenue > cogs) {
+      grossProfitApprox = revenue - cogs
+    }
+  }
+
   let enterpriseValue = pick(km, ['enterpriseValue', 'enterpriseValueTTM'])
+  if (
+    (enterpriseValue === undefined || !Number.isFinite(enterpriseValue)) &&
+    mktCap !== undefined &&
+    mktCap > 1e-6 &&
+    totalDebtKm !== undefined &&
+    cashKm !== undefined
+  ) {
+    enterpriseValue = mktCap + totalDebtKm - cashKm
+  }
+
   let enterpriseValueToGrossProfit: number | undefined
-  if (enterpriseValue !== undefined && grossProfitApprox !== undefined && grossProfitApprox !== 0) {
+  if (
+    enterpriseValue !== undefined &&
+    grossProfitApprox !== undefined &&
+    grossProfitApprox > 1e-9
+  ) {
     enterpriseValueToGrossProfit = enterpriseValue / grossProfitApprox
   }
   let enterpriseValueToRevenue: number | undefined
@@ -104,31 +134,28 @@ function extractPeerRow(km?: JsonRecord) {
   }
 
   let roic = normalizeMarginRatio(pick(km, ['roic', 'returnOnInvestedCapital']))
-  const debtRoicKm = pick(km, ['totalDebt'])
-  const cashRoicKm = pick(km, ['cashAndCashEquivalents', 'cashAndShortTermInvestments', 'cash'])
   if (
     (roic === undefined || !Number.isFinite(roic)) &&
     opIncKm !== undefined &&
     eqKm !== undefined &&
-    debtRoicKm !== undefined &&
-    cashRoicKm !== undefined
+    totalDebtKm !== undefined &&
+    cashKm !== undefined
   ) {
-    const invCapPeer = eqKm + debtRoicKm - cashRoicKm
+    const invCapPeer = eqKm + totalDebtKm - cashKm
     if (invCapPeer > 1e-6) {
       roic = normalizeMarginRatio(opIncKm / invCapPeer) ?? opIncKm / invCapPeer
     }
   }
 
   let evToEbit = pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM', 'evToEbit'])
-  const evKm = pick(km, ['enterpriseValue', 'enterpriseValueTTM'])
   const ebitKm = pick(km, ['ebit', 'operatingIncome', 'operatingIncomeTTM'])
   if (
     (evToEbit === undefined || !Number.isFinite(evToEbit)) &&
-    evKm !== undefined &&
+    enterpriseValue !== undefined &&
     ebitKm !== undefined &&
     Math.abs(ebitKm) > 1e-6
   ) {
-    evToEbit = evKm / ebitKm
+    evToEbit = enterpriseValue / ebitKm
   }
 
   let peTrailing = pick(km, ['peRatio', 'trailingPE', 'trailingPe'])
