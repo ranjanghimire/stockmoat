@@ -1,0 +1,287 @@
+# StockMoat — sector_profiles.v1.yaml (12 profiles)
+schema: stockmoat/sector_profiles/1
+
+peer_rules:
+  matching_ladder:
+    - { level: gics_sub_industry, code_width: 8 }
+    - { level: gics_industry, code_width: 6 }
+    - { level: gics_industry_group, code_width: 4 }
+    - { level: gics_sector_plus_size_band, code_width: 2 }
+  size_band:
+    primary_metric: ttm_revenue
+    bank_primary_metric: total_assets
+    insurer_primary_metric: total_assets
+    reit_primary_metric: enterprise_value
+    ratio_min: 0.25
+    ratio_max: 4.0
+    log_abs_max_delta: 0.6
+  liquidity:
+    median_dollar_volume_usd_63d_min: 2000000
+    min_price_usd: 2.0
+  peer_median_rules:
+    min_n_strict: 8
+    min_n_soft: 5
+    max_peers_cap: 40
+    winsorize_pct: [2, 98]
+  exclusions:
+    exclude_non_positive_ebitda_for_metric_ids: [ev_to_ebitda_vs_peer]
+    exclude_non_positive_ebit_for_metric_ids: [ev_to_ebit_vs_peer]
+  recalc:
+    prices: daily
+    fundamentals: quarterly_or_on_new_filing
+
+score_caps:
+  any_gate_fail: 6
+  critical_gate_fail: 4
+
+profiles:
+  banks_thrifts:
+    description: "Commercial / regional banks & thrifts."
+    gics_mapping_hints:
+      prefer_sub_industries_contains: ["Banks", "Thrifts"]
+      sector_equals: Financials
+    metrics:
+      - { id: price_to_tangible_book_vs_peer, pillar: valuation, pillar_weight: 0.2, mode: score, peer_relative: true }
+      - { id: price_to_book_vs_peer, pillar: valuation, pillar_weight: 0.07, mode: score, peer_relative: true }
+      - { id: forward_pe_vs_trailing_pe, pillar: valuation, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: dividend_yield_vs_5y_median, pillar: valuation, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: roe_vs_peer, pillar: quality, pillar_weight: 0.11, mode: score, peer_relative: true }
+      - { id: roa_vs_peer, pillar: quality, pillar_weight: 0.07, mode: score, peer_relative: true }
+      - { id: efficiency_ratio_trend_3y, pillar: quality, pillar_weight: 0.05, mode: score, peer_relative: false }
+      - { id: cet1_or_tier1_capital_vs_requirement, pillar: safety, pillar_weight: 0.16, mode: gate, peer_relative: false }
+      - { id: npl_or_asset_quality_trend, pillar: safety, pillar_weight: 0.06, mode: hybrid, peer_relative: true }
+      - { id: tangible_common_equity_ratio, pillar: safety, pillar_weight: 0.05, mode: score, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.03, mode: score, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.12, mode: hybrid, peer_relative: false }
+    ignored_metrics: [peg_ttm, ev_to_ebitda_vs_peer, gross_margin_stability_3y]
+
+  insurance_general:
+    description: "P&C + life / multiline insurers."
+    gics_mapping_hints:
+      sector_equals: Financials
+      prefer_sub_industries_contains: ["Property", "Casualty", "Reinsurance", "Life", "Health Insurance", "Multi-line"]
+    metrics:
+      - { id: price_to_book_vs_peer, pillar: valuation, pillar_weight: 0.2, mode: score, peer_relative: true }
+      - { id: forward_pe_vs_trailing_pe, pillar: valuation, pillar_weight: 0.05, mode: score, peer_relative: false }
+      - { id: dividend_yield_vs_5y_median, pillar: valuation, pillar_weight: 0.05, mode: score, peer_relative: false }
+      - { id: combined_ratio_level_and_trend, pillar: quality, pillar_weight: 0.12, mode: hybrid, peer_relative: true }
+      - { id: roe_vs_peer, pillar: quality, pillar_weight: 0.14, mode: score, peer_relative: true }
+      - { id: spread_or_investment_margin_proxy, pillar: quality, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: reserve_strength_proxy, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: debt_to_capital, pillar: safety, pillar_weight: 0.12, mode: gate, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.14, mode: hybrid, peer_relative: false }
+    ignored_metrics: [peg_ttm, ev_to_ebitda_vs_peer, net_debt_to_ebitda, gross_margin_stability_3y]
+    missing_metric_redistribution:
+      combined_ratio_level_and_trend: "shift weight to roe_vs_peer"
+      spread_or_investment_margin_proxy: "shift weight to price_to_book_vs_peer"
+
+  capital_markets_brokers_asset_managers:
+    description: "Asset managers, exchanges, brokers."
+    gics_mapping_hints:
+      sector_equals: Financials
+      prefer_sub_industries_contains: ["Asset Management", "Investment Banking", "Financial Exchanges", "Broker"]
+    metrics:
+      - { id: forward_pe_vs_trailing_pe, pillar: valuation, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: operating_margin_vs_peer, pillar: quality, pillar_weight: 0.14, mode: score, peer_relative: true }
+      - { id: roe_vs_peer, pillar: quality, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: net_cash_to_revenue_or_aum_proxy, pillar: safety, pillar_weight: 0.1, mode: score, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.08, mode: score, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+    ignored_metrics: [peg_ttm, price_to_book_vs_peer, gross_margin_stability_3y]
+
+  reits:
+    description: "REITs — AFFO/FFO first."
+    gics_mapping_hints:
+      sector_equals: Real Estate
+      industry_group_contains: ["REIT"]
+    metrics:
+      - { id: price_to_affo_or_ffo_vs_peer, pillar: valuation, pillar_weight: 0.26, mode: score, peer_relative: true }
+      - { id: dividend_yield_vs_5y_median, pillar: valuation, pillar_weight: 0.08, mode: score, peer_relative: false }
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.06, mode: score, peer_relative: true }
+      - { id: same_store_noi_growth_or_affo_growth, pillar: quality, pillar_weight: 0.14, mode: score, peer_relative: true }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+      - { id: net_debt_to_ebitda_reit_definition, pillar: safety, pillar_weight: 0.16, mode: gate, peer_relative: false }
+      - { id: secured_debt_ratio_or_maturity_wall_proxy, pillar: safety, pillar_weight: 0.06, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+    ignored_metrics: [peg_ttm, eps_yoy_growth_2_of_3, gross_margin_stability_3y]
+
+  utilities_electric_gas_water:
+    description: "Regulated utilities."
+    gics_mapping_hints:
+      sector_equals: Utilities
+    metrics:
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.16, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.08, mode: score, peer_relative: true }
+      - { id: dividend_yield_vs_5y_median, pillar: valuation, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: roe_vs_allowed_return_proxy, pillar: quality, pillar_weight: 0.1, mode: score, peer_relative: false }
+      - { id: operating_margin_vs_peer, pillar: quality, pillar_weight: 0.08, mode: score, peer_relative: true }
+      - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.14, mode: hybrid, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.12, mode: gate, peer_relative: false }
+      - { id: ocf_to_capex_coverage, pillar: cash_truth, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+    ignored_metrics: [peg_ttm, price_to_book_vs_peer]
+
+  energy_exploration_production:
+    description: "E&P commodity cyclicals."
+    gics_mapping_hints:
+      prefer_sub_industries_contains: ["Exploration", "Production", "Independent"]
+    metrics:
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.14, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_own_5y_median, pillar: valuation, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: roic_vs_peer, pillar: quality, pillar_weight: 0.08, mode: score, peer_relative: true }
+      - { id: ebitda_margin_vs_peer, pillar: quality, pillar_weight: 0.06, mode: score, peer_relative: true }
+      - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.14, mode: gate, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: fcf_positive_ttm, pillar: cash_truth, pillar_weight: 0.04, mode: hybrid, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+    ignored_metrics: [peg_ttm, price_to_book_vs_peer, gross_margin_stability_3y]
+
+  energy_midstream_integrated_refining:
+    description: "Midstream / integrated / refining."
+    gics_mapping_hints:
+      prefer_sub_industries_contains: ["Midstream", "Integrated", "Refining", "Marketing"]
+    metrics:
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.2, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: dividend_yield_vs_5y_median, pillar: valuation, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: roic_vs_peer, pillar: quality, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: ebitda_margin_vs_peer, pillar: quality, pillar_weight: 0.08, mode: score, peer_relative: true }
+      - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.16, mode: gate, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.06, mode: hybrid, peer_relative: false }
+    ignored_metrics: [peg_ttm, price_to_book_vs_peer, gross_margin_stability_3y]
+
+  materials_mining_chemicals_paper_packaging:
+    description: "Materials — cyclical."
+    gics_mapping_hints:
+      sector_equals: Materials
+    metrics:
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.16, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: peg_ttm, pillar: valuation, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: roic_vs_peer, pillar: quality, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: gross_margin_stability_3y, pillar: quality, pillar_weight: 0.08, mode: score, peer_relative: false }
+      - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.12, mode: hybrid, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: fcf_positive_ttm, pillar: cash_truth, pillar_weight: 0.04, mode: hybrid, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+    ignored_metrics: [price_to_book_vs_peer]
+
+  industrials_machinery_aerospace_transportation_construction:
+    description: "Industrials."
+    gics_mapping_hints:
+      sector_equals: Industrials
+    metrics:
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.14, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: peg_ttm, pillar: valuation, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: roic_vs_peer, pillar: quality, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: gross_margin_stability_3y, pillar: quality, pillar_weight: 0.08, mode: score, peer_relative: false }
+      - { id: backlog_growth_proxy, pillar: quality, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.12, mode: hybrid, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: fcf_positive_ttm, pillar: cash_truth, pillar_weight: 0.04, mode: hybrid, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.06, mode: hybrid, peer_relative: false }
+    ignored_metrics: [price_to_book_vs_peer]
+
+  consumer_staples_discretionary_general:
+    description: "Consumer (autos excluded from mapping)."
+    gics_mapping_hints:
+      sector_in: ["Consumer Staples", "Consumer Discretionary"]
+      exclude_sub_industries_contains: ["Automobiles", "Auto Parts"]
+    metrics:
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.14, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: peg_ttm, pillar: valuation, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: roic_vs_peer, pillar: quality, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: gross_margin_stability_3y, pillar: quality, pillar_weight: 0.1, mode: score, peer_relative: false }
+      - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.06, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: fcf_positive_ttm, pillar: cash_truth, pillar_weight: 0.04, mode: hybrid, peer_relative: false }
+      - { id: eps_yoy_growth_2_of_3, pillar: stability, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+    ignored_metrics: [price_to_book_vs_peer]
+
+  healthcare_pharma_medtech_services_tools:
+    description: "Profitable healthcare; exclude pre-revenue biotech from this profile."
+    gics_mapping_hints:
+      sector_equals: Health Care
+      exclude_sub_industries_contains: ["Biotechnology"]
+    metrics:
+      - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.14, mode: score, peer_relative: true }
+      - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+      - { id: peg_ttm, pillar: valuation, pillar_weight: 0.04, mode: score, peer_relative: false }
+      - { id: roic_vs_peer, pillar: quality, pillar_weight: 0.12, mode: score, peer_relative: true }
+      - { id: gross_margin_stability_3y, pillar: quality, pillar_weight: 0.08, mode: score, peer_relative: false }
+      - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+      - { id: interest_coverage, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+      - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+      - { id: fcf_positive_ttm, pillar: cash_truth, pillar_weight: 0.04, mode: hybrid, peer_relative: false }
+      - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.12, mode: hybrid, peer_relative: false }
+    ignored_metrics: [price_to_book_vs_peer]
+
+  information_technology:
+    description: "Software/SaaS vs semis/hardware — variant by GICS sub-industry."
+    gics_mapping_hints:
+      sector_equals: Information Technology
+    variant_selection:
+      software_saas:
+        match_sub_industries_contains: ["Software", "Application", "IT Services", "Internet Services"]
+      semis_hardware:
+        match_sub_industries_contains: ["Semiconductors", "Electronic Equipment", "Technology Hardware", "Communications Equipment"]
+    variants:
+      software_saas:
+        metrics:
+          - { id: ev_to_gross_profit_vs_peer, pillar: valuation, pillar_weight: 0.14, mode: score, peer_relative: true }
+          - { id: ev_to_revenue_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+          - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.12, mode: score, peer_relative: true }
+          - { id: fcf_yield_vs_own_5y_median, pillar: valuation, pillar_weight: 0.06, mode: score, peer_relative: false }
+          - { id: rule_of_40, pillar: quality, pillar_weight: 0.14, mode: score, peer_relative: false }
+          - { id: gross_margin_stability_3y, pillar: quality, pillar_weight: 0.1, mode: score, peer_relative: false }
+          - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+          - { id: interest_coverage, pillar: safety, pillar_weight: 0.04, mode: score, peer_relative: false }
+          - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.08, mode: score, peer_relative: false }
+          - { id: fcf_positive_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: hybrid, peer_relative: false }
+          - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+        ignored_metrics: [peg_ttm, price_to_book_vs_peer, ev_to_ebitda_vs_peer]
+        fallbacks:
+          ev_to_gross_profit_vs_peer: ev_to_ebit_vs_peer
+      semis_hardware:
+        metrics:
+          - { id: ev_to_ebitda_vs_peer, pillar: valuation, pillar_weight: 0.16, mode: score, peer_relative: true }
+          - { id: ev_to_ebit_vs_peer, pillar: valuation, pillar_weight: 0.14, mode: score, peer_relative: true }
+          - { id: fcf_yield_vs_peer, pillar: valuation, pillar_weight: 0.1, mode: score, peer_relative: true }
+          - { id: peg_ttm, pillar: valuation, pillar_weight: 0.04, mode: score, peer_relative: false }
+          - { id: roic_vs_peer, pillar: quality, pillar_weight: 0.12, mode: score, peer_relative: true }
+          - { id: gross_margin_stability_3y, pillar: quality, pillar_weight: 0.08, mode: score, peer_relative: false }
+          - { id: net_debt_to_ebitda, pillar: safety, pillar_weight: 0.1, mode: hybrid, peer_relative: false }
+          - { id: interest_coverage, pillar: safety, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+          - { id: ocf_to_ni_ttm, pillar: cash_truth, pillar_weight: 0.06, mode: score, peer_relative: false }
+          - { id: fcf_positive_ttm, pillar: cash_truth, pillar_weight: 0.04, mode: hybrid, peer_relative: false }
+          - { id: piotroski_f_score, pillar: stability, pillar_weight: 0.08, mode: hybrid, peer_relative: false }
+        ignored_metrics: [price_to_book_vs_peer]
+
+implementation_notes:
+  normalization: "Each scored metric emits 0..1; multiply by pillar_weight; sum; map to 1..10; apply score_caps on gate failures."
+  missing_data: "Redistribute weights within the same pillar or lower confidence in UI."
+  peer_fallback_order: "peer_median_if_n>=5 -> sector_median -> company_5y_median"
