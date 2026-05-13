@@ -26,7 +26,6 @@ import { resolveProfileMetrics } from '../lib/resolveProfileMetrics'
 import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
 import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
 import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
-import { MetricTable } from '../components/MetricTable'
 import { PillarBars } from '../components/PillarBars'
 import { PillarDetailPanel } from '../components/PillarDetailPanel'
 import { ScoreHero } from '../components/ScoreHero'
@@ -402,19 +401,10 @@ export default function HomePage() {
             {analysis.fundamentals?.balanceCharts ? (
               <BalanceFundamentalCharts charts={analysis.fundamentals.balanceCharts} />
             ) : null}
-            <MetricTable analysis={analysis} />
           </>
         ) : !loading && !error ? (
           <p className="text-sm text-slate-600">Enter a ticker to load data.</p>
         ) : null}
-
-        <section className="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-6 text-sm text-slate-600">
-          <h3 className="font-display text-lg text-moat-ink">Sample tickers (demo routing hints)</h3>
-          <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            {Object.keys(DEMO_TICKERS).join(', ')} — IT names still respect industry strings for the software vs semis
-            split when auto profile is Information Technology.
-          </p>
-        </section>
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white/60 py-6 text-center text-xs text-slate-500 backdrop-blur">
