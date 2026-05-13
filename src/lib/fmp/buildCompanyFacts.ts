@@ -143,8 +143,21 @@ function computeAnalystForwardPe(price: number | undefined, estimates: JsonRecor
   let bestEps: number | undefined
   let bestYear = -Infinity
   for (const row of estimates) {
-    const y = pick(row, ['calendarYear', 'fiscalYear'])
-    const eps = pick(row, ['estimatedEpsAvg', 'estimatedEarningsAvg', 'epsAvg'])
+    let y = pick(row, ['calendarYear', 'fiscalYear', 'year'])
+    if (y === undefined) {
+      const d = row.date
+      if (typeof d === 'string' || typeof d === 'number') {
+        const parsed = new Date(String(d))
+        if (!Number.isNaN(parsed.getTime())) y = parsed.getFullYear()
+      }
+    }
+    const eps = pick(row, [
+      'estimatedEpsAvg',
+      'estimatedEarningsAvg',
+      'epsAvg',
+      'estimatedEps',
+      'eps',
+    ])
     if (eps === undefined || eps <= 0 || y === undefined) continue
     if (y > bestYear) {
       bestYear = y
@@ -205,16 +218,55 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
 
   const price = pick(q, ['price'])
   const marketCap = pick(q, ['marketCap']) ?? pick(km, ['marketCap']) ?? pick(p, ['mktCap'])
-  const peTrailing = pick(q, ['pe']) ?? pick(km, ['peRatio']) ?? pick(r, ['priceEarningsRatio'])
+  let peTrailing =
+    pick(q, ['pe', 'peRatio', 'trailingPE', 'priceToEarnings']) ??
+    pick(km, ['peRatio', 'priceEarningsRatio', 'trailingPe', 'trailingPE']) ??
+    pick(r, ['priceEarningsRatio', 'peRatio', 'trailingPe', 'trailingPE'])
 
-  let forwardPe = pick(r, ['forwardPriceToEarnings', 'forwardPE']) ?? pick(km, ['forwardPe', 'forwardPE'])
+  const forwardPeFromRatios = pick(r, [
+    'forwardPriceToEarnings',
+    'forwardPE',
+    'forwardPe',
+    'forwardPeRatio',
+    'forwardPERatio',
+  ])
+  const forwardPeFromKm = pick(km, [
+    'forwardPeRatio',
+    'forwardPERatio',
+    'forwardPe',
+    'forwardPE',
+    'forwardPriceToEarnings',
+  ])
+  let forwardPe = forwardPeFromRatios ?? forwardPeFromKm
   let forwardPeSource: CompanyFacts['forwardPeSource'] = undefined
-  if (pick(r, ['forwardPriceToEarnings', 'forwardPE']) !== undefined) forwardPeSource = 'ratios'
-  else if (pick(km, ['forwardPe', 'forwardPE']) !== undefined) forwardPeSource = 'key_metrics'
+  if (forwardPeFromRatios !== undefined) forwardPeSource = 'ratios'
+  else if (forwardPeFromKm !== undefined) forwardPeSource = 'key_metrics'
   const analystPe = computeAnalystForwardPe(price, pack.analystEstimates)
   if (analystPe !== undefined) {
     forwardPe = analystPe
     forwardPeSource = 'analyst'
+  }
+  if (
+    (forwardPe === undefined || !Number.isFinite(forwardPe) || forwardPe <= 0) &&
+    price !== undefined &&
+    price > 0 &&
+    pack.analystEstimates.length > 0
+  ) {
+    for (let i = pack.analystEstimates.length - 1; i >= 0; i--) {
+      const row = pack.analystEstimates[i]!
+      const eps = pick(row, [
+        'estimatedEpsAvg',
+        'estimatedEarningsAvg',
+        'epsAvg',
+        'estimatedEps',
+        'eps',
+      ])
+      if (eps !== undefined && eps > 0) {
+        forwardPe = price / eps
+        forwardPeSource = 'analyst'
+        break
+      }
+    }
   }
 
   const priceToBook = pick(km, ['pbRatio', 'priceToBookRatio']) ?? pick(r, ['priceToBookRatio'])
@@ -227,15 +279,23 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     pick(q, ['enterpriseValue'])
   const evToEbitda =
     pick(km, ['enterpriseValueOverEBITDA', 'evToEBITDATTM']) ?? pick(r, ['enterpriseValueMultiple'])
-  const evToEbit = pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM']) ?? pick(r, ['enterpriseValueOverEBIT'])
+  let evToEbit =
+    pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM', 'evToEbit']) ??
+    pick(r, ['enterpriseValueOverEBIT', 'evToEbit'])
 
   let fcfYield =
     pick(km, ['freeCashFlowYield']) ?? pick(r, ['freeCashFlowYield', 'freeCashFlowYieldTTM', 'fcfYield'])
 
-  const roe = pick(km, ['roe']) ?? pick(r, ['returnOnEquity'])
+  let roe = normalizeMarginRatio(pick(km, ['roe', 'returnOnEquity']) ?? pick(r, ['returnOnEquity', 'roe']))
   const roa = pick(r, ['returnOnAssets'])
-  const roic = pick(km, ['roic']) ?? pick(r, ['returnOnCapitalEmployed'])
-  const operatingMargin = pick(km, ['operatingProfitMargin']) ?? pick(r, ['operatingProfitMargin'])
+  let roic = normalizeMarginRatio(
+    pick(km, ['roic', 'returnOnInvestedCapital', 'ROIC']) ??
+      pick(r, ['returnOnCapitalEmployed', 'returnOnInvestedCapital', 'roic']),
+  )
+  let operatingMargin = normalizeMarginRatio(
+    pick(km, ['operatingProfitMargin', 'operatingMargin']) ??
+      pick(r, ['operatingProfitMargin', 'operatingMargin']),
+  )
   const ebitdaMargin = pick(km, ['ebitdaMargin']) ?? pick(r, ['ebitdaMargin'])
   const grossMarginRaw =
     pick(km, ['grossProfitMargin']) ??
@@ -510,6 +570,74 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     const mid = Math.floor(sorted.length / 2)
     fcfToRevenueMedian5y =
       sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
+  }
+
+  const ebitLikeForEv = pick(incSrc, ['ebit', 'EBIT']) ?? pick(incSrc, ['operatingIncome'])
+  const opIncForMargin = pick(incSrc, ['operatingIncome'])
+  const revForMargins = revenueTotalUsd ?? revAbs
+
+  if (
+    (operatingMargin === undefined || !Number.isFinite(operatingMargin)) &&
+    opIncForMargin !== undefined &&
+    revForMargins !== undefined &&
+    revForMargins > 0
+  ) {
+    operatingMargin = opIncForMargin / revForMargins
+  }
+
+  if (
+    (roe === undefined || !Number.isFinite(roe)) &&
+    niAbs !== undefined &&
+    totalEquity !== undefined &&
+    totalEquity > 1e-6
+  ) {
+    roe = normalizeMarginRatio(niAbs / totalEquity) ?? niAbs / totalEquity
+  }
+
+  if (
+    (roic === undefined || !Number.isFinite(roic)) &&
+    ebitLikeForEv !== undefined &&
+    Math.abs(ebitLikeForEv) > 1e-6 &&
+    totalEquity !== undefined &&
+    totalDebtBs !== undefined &&
+    cashAndEquivalents !== undefined
+  ) {
+    const investedCapital = totalEquity + totalDebtBs - cashAndEquivalents
+    if (investedCapital > 1e-6) {
+      const pretax = pick(incSrc, ['incomeBeforeTax', 'incomeBeforeIncomeTaxes'])
+      const taxExp = pick(incSrc, ['incomeTaxExpense'])
+      let nopat = ebitLikeForEv
+      if (
+        pretax !== undefined &&
+        pretax > 1e-6 &&
+        taxExp !== undefined &&
+        Number.isFinite(taxExp)
+      ) {
+        const tEff = Math.min(0.55, Math.max(0, taxExp / pretax))
+        nopat = ebitLikeForEv * (1 - tEff)
+      }
+      roic = normalizeMarginRatio(nopat / investedCapital) ?? nopat / investedCapital
+    }
+  }
+
+  if (
+    (evToEbit === undefined || !Number.isFinite(evToEbit)) &&
+    enterpriseValue !== undefined &&
+    ebitLikeForEv !== undefined &&
+    Math.abs(ebitLikeForEv) > 1e-6
+  ) {
+    evToEbit = enterpriseValue / ebitLikeForEv
+  }
+
+  if (
+    (peTrailing === undefined || !Number.isFinite(peTrailing) || peTrailing <= 0) &&
+    price !== undefined &&
+    price > 0
+  ) {
+    const epsTtm = pick(incSrc, ['epsdiluted', 'eps'])
+    if (epsTtm !== undefined && epsTtm > 0) {
+      peTrailing = price / epsTtm
+    }
   }
 
   return {

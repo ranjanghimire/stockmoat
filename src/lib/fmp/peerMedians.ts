@@ -80,16 +80,78 @@ function extractPeerRow(km?: JsonRecord) {
     fcfYield = fcfAbs / mktCap
   }
 
+  let roe = normalizeMarginRatio(pick(km, ['roe', 'returnOnEquity']))
+  const netIncKm = pick(km, ['netIncome', 'netIncomeTTM'])
+  const eqKm = pick(km, ['totalStockholdersEquity', 'totalEquity'])
+  if (
+    (roe === undefined || !Number.isFinite(roe)) &&
+    netIncKm !== undefined &&
+    eqKm !== undefined &&
+    eqKm > 1e-6
+  ) {
+    roe = normalizeMarginRatio(netIncKm / eqKm) ?? netIncKm / eqKm
+  }
+
+  let operatingMargin = normalizeMarginRatio(pick(km, ['operatingProfitMargin', 'operatingMargin']))
+  const opIncKm = pick(km, ['operatingIncome', 'operatingIncomeTTM'])
+  if (
+    (operatingMargin === undefined || !Number.isFinite(operatingMargin)) &&
+    opIncKm !== undefined &&
+    revenue !== undefined &&
+    revenue > 0
+  ) {
+    operatingMargin = opIncKm / revenue
+  }
+
+  let roic = normalizeMarginRatio(pick(km, ['roic', 'returnOnInvestedCapital']))
+  const debtRoicKm = pick(km, ['totalDebt'])
+  const cashRoicKm = pick(km, ['cashAndCashEquivalents', 'cashAndShortTermInvestments', 'cash'])
+  if (
+    (roic === undefined || !Number.isFinite(roic)) &&
+    opIncKm !== undefined &&
+    eqKm !== undefined &&
+    debtRoicKm !== undefined &&
+    cashRoicKm !== undefined
+  ) {
+    const invCapPeer = eqKm + debtRoicKm - cashRoicKm
+    if (invCapPeer > 1e-6) {
+      roic = normalizeMarginRatio(opIncKm / invCapPeer) ?? opIncKm / invCapPeer
+    }
+  }
+
+  let evToEbit = pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM', 'evToEbit'])
+  const evKm = pick(km, ['enterpriseValue', 'enterpriseValueTTM'])
+  const ebitKm = pick(km, ['ebit', 'operatingIncome', 'operatingIncomeTTM'])
+  if (
+    (evToEbit === undefined || !Number.isFinite(evToEbit)) &&
+    evKm !== undefined &&
+    ebitKm !== undefined &&
+    Math.abs(ebitKm) > 1e-6
+  ) {
+    evToEbit = evKm / ebitKm
+  }
+
+  let peTrailing = pick(km, ['peRatio', 'trailingPE', 'trailingPe'])
+  const niPs = pick(km, ['netIncomePerShareTTM'])
+  if (
+    (peTrailing === undefined || !Number.isFinite(peTrailing) || peTrailing <= 0) &&
+    impliedPrice !== undefined &&
+    niPs !== undefined &&
+    niPs > 0
+  ) {
+    peTrailing = impliedPrice / niPs
+  }
+
   return {
     evToEbitda: pick(km, ['enterpriseValueOverEBITDA', 'evToEBITDATTM']),
-    evToEbit: pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM']),
+    evToEbit,
     fcfYield,
-    roe: pick(km, ['roe']),
+    roe,
     roa: pick(km, ['returnOnAssets', 'roa']),
-    roic: pick(km, ['roic']),
+    roic,
     priceToBook: pick(km, ['pbRatio', 'priceToBookRatio']),
-    peTrailing: pick(km, ['peRatio']),
-    operatingMargin: pick(km, ['operatingProfitMargin']),
+    peTrailing,
+    operatingMargin,
     ebitdaMargin: pick(km, ['ebitdaMargin']),
     enterpriseValueToRevenue,
     enterpriseValueToGrossProfit,
