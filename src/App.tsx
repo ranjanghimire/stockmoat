@@ -32,6 +32,12 @@ function formatProfileId(id: string): string {
     .join(' ')
 }
 
+function formatAutoMappedProfileLabel(a: MoatAnalysis): string {
+  return a.itVariant
+    ? `${formatProfileId(a.profileId)} · ${a.itVariant.replace('_', ' ')}`
+    : formatProfileId(a.profileId)
+}
+
 export default function App() {
   const [tickerInput, setTickerInput] = useState('MSFT')
   const [profileMode, setProfileMode] = useState<'auto' | 'manual'>('auto')
@@ -248,22 +254,48 @@ export default function App() {
             
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="profile">
-              Manual sector profile
-            </label>
-            <select
-              id="profile"
-              disabled={profileMode !== 'manual'}
-              value={manualProfile}
-              onChange={(e) => setManualProfile(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner outline-none focus:ring-2 focus:ring-moat-accent/30 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {PROFILE_ORDER.map((id) => (
-                <option key={id} value={id}>
-                  {formatProfileId(id)}
-                </option>
-              ))}
-            </select>
+            {profileMode === 'auto' ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mapped profile (auto)</p>
+                <div className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 shadow-inner">
+                  {loading ? (
+                    <span className="text-slate-500">Updating sector-mapped profile…</span>
+                  ) : analysis ? (
+                    <>
+                      <span className="font-medium text-moat-ink">{formatAutoMappedProfileLabel(analysis)}</span>
+                      {analysis.sector ? (
+                        <span className="mt-1 block text-xs font-normal text-slate-500">
+                          FMP sector: {analysis.sector}
+                          {analysis.industry ? ` · ${analysis.industry}` : ''}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : error ? (
+                    <span className="text-rose-800/90">Not loaded — fix the issue above and retry.</span>
+                  ) : (
+                    <span className="text-slate-500">Enter a ticker and run Analyze to see the mapped profile.</span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="profile">
+                  Manual sector profile
+                </label>
+                <select
+                  id="profile"
+                  value={manualProfile}
+                  onChange={(e) => setManualProfile(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner outline-none focus:ring-2 focus:ring-moat-accent/30"
+                >
+                  {PROFILE_ORDER.map((id) => (
+                    <option key={id} value={id}>
+                      {formatProfileId(id)}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
           </div>
         </section>
 
