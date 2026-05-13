@@ -5,6 +5,13 @@ export function firstRow<T extends JsonRecord>(rows: unknown): T | undefined {
   return rows[0] as T
 }
 
+/** Stable API may return a single object instead of a one-element array. */
+export function asArray<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[]
+  if (data !== null && data !== undefined && typeof data === 'object') return [data as T]
+  return []
+}
+
 export function num(...vals: Array<unknown>): number | undefined {
   for (const v of vals) {
     if (typeof v === 'number' && Number.isFinite(v)) return v

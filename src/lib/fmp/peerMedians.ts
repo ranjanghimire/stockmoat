@@ -1,5 +1,5 @@
 import { fmpGet } from './http'
-import { firstRow, median, num, type JsonRecord } from './normalize'
+import { asArray, firstRow, median, num, type JsonRecord } from './normalize'
 
 export interface PeerMedians {
   n: number
@@ -71,8 +71,12 @@ export async function fetchPeerMedians(
     const part = await Promise.all(
       batch.map(async (sym) => {
         try {
-          const arr = await fmpGet<JsonRecord[]>(`/api/v3/key-metrics-ttm/${encodeURIComponent(sym)}`, apiKey)
-          return extractPeerRow(firstRow(arr))
+          const raw = await fmpGet<unknown>(
+            `/stable/key-metrics-ttm?symbol=${encodeURIComponent(sym)}`,
+            apiKey,
+          )
+          const rows = asArray<JsonRecord>(raw)
+          return extractPeerRow(firstRow(rows))
         } catch {
           return undefined
         }
