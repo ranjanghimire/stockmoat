@@ -5,6 +5,9 @@ interface ScoreHeroProps {
   profileLabel: string
   anyGateFail: boolean
   scoreCap: number
+  dataSource?: 'fmp' | 'demo'
+  sector?: string
+  industry?: string
 }
 
 export function ScoreHero({
@@ -14,6 +17,9 @@ export function ScoreHero({
   profileLabel,
   anyGateFail,
   scoreCap,
+  dataSource = 'demo',
+  sector,
+  industry,
 }: ScoreHeroProps) {
   const hue = Math.round(120 - (score / 10) * 70)
   return (
@@ -30,9 +36,23 @@ export function ScoreHero({
             <span className="ml-3 text-2xl font-sans font-medium text-slate-500 md:text-3xl">{name}</span>
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-            Sector profile: <span className="font-medium text-moat-ink">{profileLabel}</span>. Scores use your
-            YAML weights; numbers here are <span className="font-medium">deterministic mocks</span> until you wire
-            a fundamentals API.
+            Sector profile: <span className="font-medium text-moat-ink">{profileLabel}</span>. Data:{' '}
+            <span className="font-medium text-moat-ink">
+              {dataSource === 'fmp' ? 'Financial Modeling Prep (live)' : 'demo / offline'}
+            </span>
+            {sector ? (
+              <>
+                {' '}
+                · FMP sector <span className="font-medium text-moat-ink">{sector}</span>
+                {industry ? (
+                  <>
+                    {' '}
+                    / <span className="font-medium text-moat-ink">{industry}</span>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+            . Weights come from <span className="font-medium">config/sector_profiles.v1.yaml</span>.
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 md:items-end">

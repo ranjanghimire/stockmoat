@@ -57,6 +57,11 @@ export function MetricTable({ analysis }: MetricTableProps) {
                   {m.mode === 'gate' ? (
                     <span className={m.gatePass ? 'text-emerald-700' : 'text-rose-700'}>
                       {m.gatePass ? 'Pass' : 'Fail'}
+                      {m.gatePass && m.gateCredit !== undefined && m.gateCredit < 1 ? (
+                        <span className="block text-[10px] font-normal text-slate-500">
+                          credit {(m.gateCredit * 100).toFixed(0)}%
+                        </span>
+                      ) : null}
                     </span>
                   ) : (
                     <span className="text-slate-400">—</span>

@@ -1,6 +1,6 @@
-import { evaluateMetricDemo } from './mockMetricDriver'
 import { loadSectorProfiles, normalizeMetricWeights } from './loadSectorProfiles'
 import { metricLabel } from './metricLabels'
+import type { MetricEval } from './mockMetricDriver'
 import type { ProfileMetricDef } from '../types/sectorProfiles'
 
 export interface MetricRow extends ProfileMetricDef {
@@ -9,6 +9,7 @@ export interface MetricRow extends ProfileMetricDef {
   gatePass: boolean
   displayValue: string
   peerNote?: string
+  gateCredit?: number
 }
 
 export interface PillarRollup {
@@ -28,6 +29,9 @@ export interface MoatAnalysis {
   scoreCap: number
   metrics: MetricRow[]
   pillars: PillarRollup[]
+  sector?: string
+  industry?: string
+  dataSource: 'fmp' | 'demo'
 }
 
 export function computeMoatAnalysis(
@@ -35,7 +39,9 @@ export function computeMoatAnalysis(
   displayName: string,
   profileId: string,
   metricsInput: ProfileMetricDef[],
-  itVariant?: string,
+  itVariant: string | undefined,
+  evaluateMetric: (m: ProfileMetricDef) => MetricEval,
+  meta?: { sector?: string; industry?: string; dataSource?: 'fmp' | 'demo' },
 ): MoatAnalysis {
   const root = loadSectorProfiles()
   const metrics = normalizeMetricWeights(metricsInput)
@@ -46,12 +52,13 @@ export function computeMoatAnalysis(
   let anyGateFail = false
 
   for (const m of metrics) {
-    const ev = evaluateMetricDemo(ticker, m.id, m.mode, m.peer_relative)
+    const ev = evaluateMetric(m)
     const label = metricLabel(m.id)
 
     if (m.mode === 'gate') {
       if (!ev.gatePass) anyGateFail = true
-      rawWeighted += m.pillar_weight * (ev.gatePass ? 1 : 0)
+      const credit = ev.gatePass ? (ev.gateCredit ?? 1) : 0
+      rawWeighted += m.pillar_weight * credit
     } else {
       rawWeighted += m.pillar_weight * ev.subscore
     }
@@ -63,6 +70,7 @@ export function computeMoatAnalysis(
       gatePass: ev.gatePass,
       displayValue: ev.displayValue,
       peerNote: ev.peerNote,
+      gateCredit: ev.gateCredit,
     })
   }
 
@@ -73,7 +81,9 @@ export function computeMoatAnalysis(
   const pillarMap = new Map<string, { weight: number; contribution: number }>()
   for (const m of rows) {
     const contrib =
-      m.mode === 'gate' ? m.pillar_weight * (m.gatePass ? 1 : 0) : m.pillar_weight * m.subscore
+      m.mode === 'gate'
+        ? m.pillar_weight * (m.gatePass ? (m.gateCredit ?? 1) : 0)
+        : m.pillar_weight * m.subscore
     const cur = pillarMap.get(m.pillar) ?? { weight: 0, contribution: 0 }
     cur.weight += m.pillar_weight
     cur.contribution += contrib
@@ -97,5 +107,8 @@ export function computeMoatAnalysis(
     scoreCap: cap,
     metrics: rows,
     pillars,
+    sector: meta?.sector,
+    industry: meta?.industry,
+    dataSource: meta?.dataSource ?? 'demo',
   }
 }

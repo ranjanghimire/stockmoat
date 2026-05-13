@@ -6,6 +6,8 @@ export interface MetricEval {
   gatePass: boolean
   displayValue: string
   peerNote?: string
+  /** When mode is gate and gatePass is true, scales contribution (defaults to 1). */
+  gateCredit?: number
 }
 
 function peerLine(ticker: string, id: string, peerRelative?: boolean): string | undefined {
