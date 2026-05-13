@@ -129,6 +129,9 @@ export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown
   const incomeAnnual = historyRows(s.incomeStatementHistory, 'incomeStatementHistory').map((r) =>
     mapIncomeLikeRow(r),
   )
+  const incomeQuarterly = historyRows(s.incomeStatementHistoryQuarterly, 'incomeStatementHistoryQuarterly').map((r) =>
+    mapIncomeLikeRow(r),
+  )
   const cashAnnual = historyRows(s.cashflowStatementHistory, 'cashflowStatementHistory').map((r) =>
     mapCashflowLikeRow(r),
   )
@@ -279,6 +282,7 @@ export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown
     keyMetricsTtm: keyMetricsTtm as CompanyRawPack['keyMetricsTtm'],
     ratiosTtm: ratiosTtm as CompanyRawPack['ratiosTtm'],
     incomeAnnual: incomeAnnual,
+    incomeQuarterly,
     cashFlowAnnual: cashAnnual,
     incomeTtm: incomeTtm as CompanyRawPack['incomeTtm'],
     cashFlowTtm: cashFlowTtm as CompanyRawPack['cashFlowTtm'],

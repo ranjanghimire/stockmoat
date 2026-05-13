@@ -15,6 +15,8 @@ export interface CompanyRawPack {
   keyMetricsTtm: JsonRecord | undefined
   ratiosTtm: JsonRecord | undefined
   incomeAnnual: JsonRecord[]
+  /** Same `limit` as annual (starter plans often cap statement `limit`). */
+  incomeQuarterly: JsonRecord[]
   cashFlowAnnual: JsonRecord[]
   incomeTtm: JsonRecord | undefined
   cashFlowTtm: JsonRecord | undefined
@@ -119,6 +121,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     kmTtmRaw,
     ratiosTtmRaw,
     incomeRaw,
+    incomeQuarterlyRaw,
     cfRaw,
     scoreRaw,
     peersRaw,
@@ -135,6 +138,10 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
       `/stable/income-statement?symbol=${q}&period=annual&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
       apiKey,
     ),
+    fmpGet<unknown>(
+      `/stable/income-statement?symbol=${q}&period=quarter&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
+      apiKey,
+    ).catch(() => null),
     fmpGet<unknown>(
       `/stable/cash-flow-statement?symbol=${q}&period=annual&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
       apiKey,
@@ -172,6 +179,10 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
   const kmTtmArr = asArray<JsonRecord>(kmTtmRaw)
   const ratiosTtmArr = asArray<JsonRecord>(ratiosTtmRaw)
   const incomeArr = asArray<JsonRecord>(incomeRaw)
+  const incomeQuarterlyArr =
+    incomeQuarterlyRaw === null || fmpPayloadHasErrorMessage(incomeQuarterlyRaw)
+      ? []
+      : asArray<JsonRecord>(incomeQuarterlyRaw)
   const cfArr = asArray<JsonRecord>(cfRaw)
   const scoreArr = scoreRaw === null ? [] : asArray<JsonRecord>(scoreRaw)
   const score = firstRow(scoreArr)
@@ -190,6 +201,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     keyMetricsTtm: firstRow(kmTtmArr),
     ratiosTtm: firstRow(ratiosTtmArr),
     incomeAnnual: incomeArr,
+    incomeQuarterly: incomeQuarterlyArr,
     cashFlowAnnual: cfArr,
     incomeTtm: firstRow(incomeTtmArr),
     cashFlowTtm: firstRow(cfTtmArr),

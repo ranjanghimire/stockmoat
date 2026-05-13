@@ -20,6 +20,7 @@ import { fetchYahooCompanyPackDev } from '../lib/yahoo/fetchYahooCompanyPackDev'
 import { loadSectorProfiles } from '../lib/loadSectorProfiles'
 import { createLiveMetricEvaluator } from '../lib/liveMetricEvaluator'
 import { resolveProfileMetrics } from '../lib/resolveProfileMetrics'
+import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
 import { MetricTable } from '../components/MetricTable'
 import { PillarBars } from '../components/PillarBars'
 import { PillarDetailPanel } from '../components/PillarDetailPanel'
@@ -140,7 +141,7 @@ export default function HomePage() {
           sector: facts.sector,
           industry: facts.industry,
           dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
-          fundamentals: buildMoatFundamentalsSnapshot(facts),
+          fundamentals: buildMoatFundamentalsSnapshot(facts, pack),
         },
       )
 
@@ -321,6 +322,9 @@ export default function HomePage() {
               onSelectPillar={setSelectedPillar}
             />
             <PillarDetailPanel analysis={analysis} pillar={selectedPillar} onClose={() => setSelectedPillar(null)} />
+            {analysis.fundamentals?.incomeCharts ? (
+              <IncomeFundamentalCharts charts={analysis.fundamentals.incomeCharts} />
+            ) : null}
             <MetricTable analysis={analysis} />
           </>
         ) : !loading && !error ? (
