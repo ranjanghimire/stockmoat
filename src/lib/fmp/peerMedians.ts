@@ -1,5 +1,5 @@
 import { fmpGet } from './http'
-import { asArray, firstRow, median, num, type JsonRecord } from './normalize'
+import { asArray, firstRow, median, num, normalizeMarginRatio, type JsonRecord } from './normalize'
 
 export interface PeerMedians {
   n: number
@@ -36,11 +36,19 @@ function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
 
 function extractPeerRow(km?: JsonRecord) {
   if (!km) return undefined
-  const enterpriseValue = pick(km, ['enterpriseValue'])
-  const grossMargin = pick(km, ['grossProfitMargin'])
-  const revenue = pick(km, ['revenue', 'totalRevenue']) ?? pick(km, ['revenuePerShareTTM'])
+  const mktCap = pick(km, ['marketCap'])
+  const shOut = pick(km, ['weightedAverageShsOutDil', 'weightedAverageShsOut'])
+  let revenue = pick(km, ['revenue', 'totalRevenue'])
+  if (revenue === undefined) {
+    const rps = pick(km, ['revenuePerShareTTM', 'revenuePerShare'])
+    if (rps !== undefined && shOut !== undefined && shOut > 0) {
+      revenue = rps * shOut
+    }
+  }
+  const grossMargin = normalizeMarginRatio(pick(km, ['grossProfitMargin']))
   const grossProfitApprox =
     revenue !== undefined && grossMargin !== undefined ? revenue * grossMargin : undefined
+  let enterpriseValue = pick(km, ['enterpriseValue', 'enterpriseValueTTM'])
   let enterpriseValueToGrossProfit: number | undefined
   if (enterpriseValue !== undefined && grossProfitApprox !== undefined && grossProfitApprox !== 0) {
     enterpriseValueToGrossProfit = enterpriseValue / grossProfitApprox
@@ -50,8 +58,6 @@ function extractPeerRow(km?: JsonRecord) {
     enterpriseValueToRevenue = enterpriseValue / revenue
   }
 
-  const mktCap = pick(km, ['marketCap'])
-  const shOut = pick(km, ['weightedAverageShsOutDil', 'weightedAverageShsOut'])
   const impliedPrice =
     mktCap !== undefined && shOut !== undefined && shOut > 0 ? mktCap / shOut : undefined
   const ffoPs = pick(km, ['ffoPerShareTTM', 'fundsFromOperationsPerShareTTM', 'operatingCashFlowPerShareTTM'])
@@ -68,10 +74,16 @@ function extractPeerRow(km?: JsonRecord) {
     revenueGrowth3Y = Math.abs(rawGrowth) <= 2 ? rawGrowth * 100 : rawGrowth
   }
 
+  let fcfYield = pick(km, ['freeCashFlowYield'])
+  const fcfAbs = pick(km, ['freeCashFlow'])
+  if ((fcfYield === undefined || !Number.isFinite(fcfYield)) && fcfAbs !== undefined && mktCap !== undefined && mktCap > 1e-6) {
+    fcfYield = fcfAbs / mktCap
+  }
+
   return {
     evToEbitda: pick(km, ['enterpriseValueOverEBITDA', 'evToEBITDATTM']),
     evToEbit: pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM']),
-    fcfYield: pick(km, ['freeCashFlowYield']),
+    fcfYield,
     roe: pick(km, ['roe']),
     roa: pick(km, ['returnOnAssets', 'roa']),
     roic: pick(km, ['roic']),

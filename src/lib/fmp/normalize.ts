@@ -29,3 +29,10 @@ export function median(values: number[]): number | undefined {
   const mid = Math.floor(xs.length / 2)
   return xs.length % 2 === 1 ? xs[mid] : (xs[mid - 1]! + xs[mid]!) / 2
 }
+
+/** FMP often uses 0–1 decimals; some feeds use 0–100 “percent points”. */
+export function normalizeMarginRatio(v: number | undefined): number | undefined {
+  if (v === undefined || !Number.isFinite(v)) return undefined
+  if (v > 1.25 && v <= 100) return v / 100
+  return v
+}

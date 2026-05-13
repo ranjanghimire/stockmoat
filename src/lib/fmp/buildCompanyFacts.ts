@@ -1,5 +1,5 @@
 import { industryFromFmpProfile, sectorFromFmpProfile } from './profileClassification'
-import { num } from './normalize'
+import { num, normalizeMarginRatio } from './normalize'
 import type { JsonRecord } from './normalize'
 import type { CompanyRawPack } from './fetchCompanyRawPack'
 
@@ -114,11 +114,15 @@ function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
   return undefined
 }
 
-/** FMP often uses 0–1 decimals; some feeds use 0–100 “percent points”. */
-function normalizeMarginRatio(v: number | undefined): number | undefined {
-  if (v === undefined || !Number.isFinite(v)) return undefined
-  if (v > 1.25 && v <= 100) return v / 100
-  return v
+function grossMarginFromIncomeRow(row: JsonRecord | undefined): number | undefined {
+  if (!row) return undefined
+  const ratioRaw = pick(row, ['grossProfitRatio', 'grossProfitMargin'])
+  const ratio = normalizeMarginRatio(ratioRaw)
+  if (ratio !== undefined) return ratio
+  const gp = pick(row, ['grossProfit'])
+  const rev = pick(row, ['revenue', 'sales', 'totalRevenue'])
+  if (gp !== undefined && rev !== undefined && rev > 0) return gp / rev
+  return undefined
 }
 
 function extractPiotroski(sc?: JsonRecord): number | undefined {
@@ -190,7 +194,7 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     .filter((v): v is number => v !== undefined)
 
   const annualGrossMargin = pack.incomeAnnual
-    .map((row) => pick(row, ['grossProfitRatio', 'grossProfitMargin']))
+    .map((row) => grossMarginFromIncomeRow(row))
     .filter((v): v is number => v !== undefined)
 
   const annualRevenue = pack.incomeAnnual
@@ -200,6 +204,7 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const annualDps = pairAnnualDividendsPerShare(pack.incomeAnnual, pack.cashFlowAnnual)
 
   const price = pick(q, ['price'])
+  const marketCap = pick(q, ['marketCap']) ?? pick(km, ['marketCap']) ?? pick(p, ['mktCap'])
   const peTrailing = pick(q, ['pe']) ?? pick(km, ['peRatio']) ?? pick(r, ['priceEarningsRatio'])
 
   let forwardPe = pick(r, ['forwardPriceToEarnings', 'forwardPE']) ?? pick(km, ['forwardPe', 'forwardPE'])
@@ -216,12 +221,16 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const pegRatio = pick(km, ['pegRatio']) ?? pick(r, ['pegRatio'])
   const dividendYield = pick(km, ['dividendYield']) ?? pick(r, ['dividendYield'])
 
-  const enterpriseValue = pick(km, ['enterpriseValue'])
+  let enterpriseValue =
+    pick(km, ['enterpriseValue', 'enterpriseValueTTM']) ??
+    pick(p, ['enterpriseValue']) ??
+    pick(q, ['enterpriseValue'])
   const evToEbitda =
     pick(km, ['enterpriseValueOverEBITDA', 'evToEBITDATTM']) ?? pick(r, ['enterpriseValueMultiple'])
   const evToEbit = pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM']) ?? pick(r, ['enterpriseValueOverEBIT'])
 
-  const fcfYield = pick(km, ['freeCashFlowYield']) ?? pick(r, ['freeCashFlowYield'])
+  let fcfYield =
+    pick(km, ['freeCashFlowYield']) ?? pick(r, ['freeCashFlowYield', 'freeCashFlowYieldTTM', 'fcfYield'])
 
   const roe = pick(km, ['roe']) ?? pick(r, ['returnOnEquity'])
   const roa = pick(r, ['returnOnAssets'])
@@ -237,7 +246,9 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   let netDebtToEbitda =
     pick(km, ['netDebtToEBITDA', 'netDebtToEbitda', 'netDebtToEBITDATTM']) ??
     pick(r, ['netDebtToEBITDA', 'netDebtToEbitda'])
-  const interestCoverage = pick(r, ['interestCoverage']) ?? pick(km, ['interestCoverage'])
+  let interestCoverage =
+    pick(r, ['interestCoverage', 'interestCoverageRatio']) ??
+    pick(km, ['interestCoverage', 'interestCoverageRatio', 'interestCoverageTTM'])
   const debtToEquity = pick(r, ['debtEquityRatio', 'debtToEquity']) ?? pick(km, ['debtToEquity'])
 
   let debtToCapital: number | undefined
@@ -248,11 +259,21 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const operatingCashFlowTtm = pick(km, ['operatingCashFlowPerShareTTM'])
   const netIncomeTtm = pick(km, ['netIncomePerShareTTM'])
   const freeCashFlowTtm = pick(km, ['freeCashFlowPerShareTTM'])
-  /** Company-level revenue (USD). Avoid revenue-per-share here — it breaks EV / GP. */
-  const revenueTotalUsd =
+  /** Company-level revenue (USD). Avoid revenue-per-share alone — it breaks EV / GP. */
+  let revenueTotalUsd =
     pick(incSrc, ['revenue', 'sales', 'totalRevenue']) ??
     pick(incAnnual0, ['revenue', 'sales', 'totalRevenue']) ??
     pick(km, ['revenue', 'totalRevenue'])
+  if (revenueTotalUsd === undefined) {
+    const rps = pick(km, ['revenuePerShareTTM', 'revenuePerShare'])
+    const sh =
+      pick(km, ['weightedAverageShsOutDil', 'weightedAverageShsOut']) ??
+      pick(incSrc, ['weightedAverageShsOutDil', 'weightedAverageShsOut']) ??
+      pick(incAnnual0, ['weightedAverageShsOutDil', 'weightedAverageShsOut'])
+    if (rps !== undefined && sh !== undefined && sh > 0) {
+      revenueTotalUsd = rps * sh
+    }
+  }
 
   const revenueTtm = revenueTotalUsd ?? pick(km, ['revenuePerShareTTM'])
 
@@ -287,6 +308,14 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const interestExp = pick(incSrc, ['interestExpense'])
   const interestInc = pick(incSrc, ['interestIncome', 'interestIncomeExpense'])
 
+  if (interestCoverage === undefined || !Number.isFinite(interestCoverage)) {
+    const ebitLike = pick(incSrc, ['ebit', 'EBIT', 'operatingIncome'])
+    const ieMag = interestExp !== undefined ? Math.abs(interestExp) : undefined
+    if (ebitLike !== undefined && ieMag !== undefined && ieMag > 1e-6) {
+      interestCoverage = ebitLike / ieMag
+    }
+  }
+
   if (ocfAbs !== undefined && niAbs !== undefined && Math.abs(niAbs) > 1e-6) {
     ocfToNetIncome = ocfAbs / niAbs
   }
@@ -296,6 +325,12 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   if (grossProfitApprox === undefined && revenueTotalUsd !== undefined && grossMargin !== undefined) {
     grossProfitApprox = revenueTotalUsd * grossMargin
   }
+  if (grossProfitApprox === undefined && revenueTotalUsd !== undefined) {
+    const cogs = pick(incSrc, ['costOfRevenue', 'costOfGoodsSold', 'costOfSales', 'costOfGoodsAndServicesSold'])
+    if (cogs !== undefined && revenueTotalUsd > cogs) {
+      grossProfitApprox = revenueTotalUsd - cogs
+    }
+  }
   let enterpriseValueToGrossProfit: number | undefined
   if (enterpriseValue !== undefined && grossProfitApprox !== undefined && grossProfitApprox !== 0) {
     enterpriseValueToGrossProfit = enterpriseValue / grossProfitApprox
@@ -304,6 +339,10 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   let enterpriseValueToRevenue: number | undefined
   if (enterpriseValue !== undefined && revenueTotalUsd !== undefined && revenueTotalUsd !== 0) {
     enterpriseValueToRevenue = enterpriseValue / revenueTotalUsd
+  }
+
+  if ((fcfYield === undefined || !Number.isFinite(fcfYield)) && fcfAbs !== undefined && marketCap !== undefined && marketCap > 1e-6) {
+    fcfYield = fcfAbs / marketCap
   }
 
   const piotroski = extractPiotroski(sc)
@@ -342,6 +381,22 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
       const netDebt = totalDebtBs - cashAndEquivalents
       netDebtToEbitda = netDebt / ebitdaTtm
     }
+  }
+
+  if (
+    (enterpriseValue === undefined || !Number.isFinite(enterpriseValue)) &&
+    marketCap !== undefined &&
+    marketCap > 1e-6 &&
+    totalDebtBs !== undefined &&
+    cashAndEquivalents !== undefined
+  ) {
+    enterpriseValue = marketCap + totalDebtBs - cashAndEquivalents
+  }
+  if (enterpriseValue !== undefined && grossProfitApprox !== undefined && grossProfitApprox !== 0) {
+    enterpriseValueToGrossProfit = enterpriseValue / grossProfitApprox
+  }
+  if (enterpriseValue !== undefined && revenueTotalUsd !== undefined && revenueTotalUsd !== 0) {
+    enterpriseValueToRevenue = enterpriseValue / revenueTotalUsd
   }
 
   let tangibleCommonEquityRatio: number | undefined
@@ -462,7 +517,7 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     companyName,
     sector,
     industry,
-    mktCap: pick(q, ['marketCap']) ?? pick(p, ['mktCap']),
+    mktCap: marketCap,
     price,
     priceToTangibleBook: (() => {
       const px = pick(q, ['price'])
