@@ -19,7 +19,7 @@ export default function ScreenerPage() {
       const id = window.setTimeout(() => {
         setLoading(false)
         setError(
-          'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local, apply the SQL in supabase/screen_scores.sql, then run npm run screen:nightly with your FMP and service-role keys.',
+          'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local, apply schema with `npx supabase db push` (migration in supabase/migrations/), then run npm run screen:nightly with your FMP and service-role keys.',
         )
         setRows(null)
       }, 0)
