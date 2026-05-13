@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getSupabaseBrowserClient, type ScreenScoreRow } from '../lib/supabaseClient'
 
 function formatProfileId(id: string): string {
@@ -99,7 +100,14 @@ export default function ScreenerPage() {
                   <tr key={r.symbol} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80">
                     <td className="px-3 py-2.5 text-slate-400">{i + 1}</td>
                     <td className="px-3 py-2.5 font-mono font-semibold text-moat-ink">{r.score.toFixed(2)}</td>
-                    <td className="px-3 py-2.5 font-mono font-medium">{r.symbol}</td>
+                    <td className="px-3 py-2.5 font-mono font-medium">
+                      <Link
+                        to={`/?ticker=${encodeURIComponent(r.symbol)}`}
+                        className="text-moat-accent underline decoration-moat-accent/30 underline-offset-2 transition hover:text-moat-accent-dim hover:decoration-moat-accent-dim"
+                      >
+                        {r.symbol}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2.5 text-slate-800">{r.display_name}</td>
                     <td className="max-w-[200px] truncate px-3 py-2.5 text-slate-600" title={r.profile_id}>
                       {formatProfileId(r.profile_id)}

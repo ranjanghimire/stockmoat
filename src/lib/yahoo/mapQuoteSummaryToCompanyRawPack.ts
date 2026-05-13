@@ -56,11 +56,17 @@ function mapCashflowLikeRow(y: JsonRecord): JsonRecord {
 }
 
 function mapBalanceLikeRow(y: JsonRecord): JsonRecord {
+  const totalAssets = num(y.totalAssets)
+  const totalEquity = num(y.totalStockholderEquity, y.commonStockTotalEquity)
+  const totalLiabilities =
+    num(y.totalLiab, y.totalLiabilities) ??
+    (totalAssets !== undefined && totalEquity !== undefined ? totalAssets - totalEquity : undefined)
   return {
     date: y.endDate instanceof Date ? y.endDate.toISOString().slice(0, 10) : String(y.endDate ?? ''),
-    totalAssets: num(y.totalAssets),
+    totalAssets,
     totalStockholdersEquity: num(y.totalStockholderEquity, y.commonStockTotalEquity, y.totalEquityGrossMinorityInterest),
-    totalEquity: num(y.totalStockholderEquity, y.commonStockTotalEquity),
+    totalEquity,
+    totalLiabilities,
     totalDebt: num(y.totalDebt),
     cashAndCashEquivalents: num(y.cash, y.cashAndCashEquivalents),
     longTermDebt: num(y.longTermDebt),
@@ -136,6 +142,9 @@ export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown
     mapCashflowLikeRow(r),
   )
   const balanceAnnual = historyRows(s.balanceSheetHistory, 'balanceSheetHistory').map((r) => mapBalanceLikeRow(r))
+  const balanceQuarterly = historyRows(s.balanceSheetHistoryQuarterly, 'balanceSheetHistoryQuarterly').map((r) =>
+    mapBalanceLikeRow(r),
+  )
 
   const incQRaw = historyRows(s.incomeStatementHistoryQuarterly, 'incomeStatementHistoryQuarterly')
   const cfQRaw = historyRows(s.cashflowStatementHistoryQuarterly, 'cashflowStatementHistoryQuarterly')
@@ -287,6 +296,7 @@ export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown
     incomeTtm: incomeTtm as CompanyRawPack['incomeTtm'],
     cashFlowTtm: cashFlowTtm as CompanyRawPack['cashFlowTtm'],
     balanceSheetAnnual: balanceAnnual,
+    balanceSheetQuarterly: balanceQuarterly,
     analystEstimates,
     score: undefined,
     peers: [],
