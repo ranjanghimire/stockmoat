@@ -15,10 +15,12 @@ export async function fetchYahooCompanyPackDev(symbol: string): Promise<CompanyR
     throw new Error(`Yahoo dev API: invalid JSON (${res.status}) ${text.slice(0, 200)}`)
   }
   if (!res.ok || (body && typeof body === 'object' && 'error' in (body as object))) {
-    const err =
-      body && typeof body === 'object' && 'error' in (body as object)
-        ? String((body as { error: unknown }).error)
-        : text.slice(0, 300)
+    const o = body && typeof body === 'object' ? (body as { error?: unknown; code?: unknown }) : null
+    const code = o?.code !== undefined ? String(o.code) : ''
+    const err = o?.error !== undefined ? String(o.error) : text.slice(0, 300)
+    if (code === 'YAHOO_RATE_LIMIT' || res.status === 429) {
+      throw new Error(err)
+    }
     throw new Error(`Yahoo dev API failed (${res.status}): ${err}`)
   }
   return body as CompanyRawPack
