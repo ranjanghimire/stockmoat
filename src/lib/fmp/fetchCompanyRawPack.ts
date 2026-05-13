@@ -1,4 +1,9 @@
 import { fmpGet } from './http'
+import {
+  fmpPayloadHasErrorMessage,
+  fmpProfileNeedsLegacyEnrichment,
+  mergeFmpProfileRows,
+} from './profileClassification'
 import { asArray, firstRow, type JsonRecord } from './normalize'
 
 /** FMP free/starter plans reject `limit` > 5 on statement endpoints (402). */
@@ -96,7 +101,21 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     ).catch(() => null),
   ])
 
-  const profileArr = asArray<JsonRecord>(profileRaw)
+  const profileStableArr = fmpPayloadHasErrorMessage(profileRaw) ? [] : asArray<JsonRecord>(profileRaw)
+  const stableProfile = firstRow(profileStableArr)
+  let profile: JsonRecord | undefined = stableProfile
+  if (fmpProfileNeedsLegacyEnrichment(stableProfile)) {
+    try {
+      const v3Raw = await fmpGet<unknown>(`/api/v3/profile/${q}`, apiKey)
+      if (!fmpPayloadHasErrorMessage(v3Raw)) {
+        const v3Row = firstRow(asArray<JsonRecord>(v3Raw))
+        profile = mergeFmpProfileRows(stableProfile, v3Row)
+      }
+    } catch {
+      profile = stableProfile
+    }
+  }
+
   const quoteArr = asArray<JsonRecord>(quoteRaw)
   const kmTtmArr = asArray<JsonRecord>(kmTtmRaw)
   const ratiosTtmArr = asArray<JsonRecord>(ratiosTtmRaw)
@@ -113,7 +132,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
   const analystArr = analystRaw === null ? [] : asArray<JsonRecord>(analystRaw)
 
   return {
-    profile: firstRow(profileArr),
+    profile,
     quote: firstRow(quoteArr),
     keyMetricsTtm: firstRow(kmTtmArr),
     ratiosTtm: firstRow(ratiosTtmArr),

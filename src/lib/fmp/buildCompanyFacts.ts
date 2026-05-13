@@ -1,3 +1,4 @@
+import { industryFromFmpProfile, sectorFromFmpProfile } from './profileClassification'
 import { num } from './normalize'
 import type { JsonRecord } from './normalize'
 import type { CompanyRawPack } from './fetchCompanyRawPack'
@@ -169,8 +170,8 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const bs0 = pack.balanceSheetAnnual[0]
 
   const companyName = typeof p?.companyName === 'string' ? p.companyName : symbol.toUpperCase()
-  const sector = typeof p?.sector === 'string' ? p.sector : 'Unknown'
-  const industry = typeof p?.industry === 'string' ? p.industry : 'Unknown'
+  const sector = sectorFromFmpProfile(p) ?? sectorFromFmpProfile(q) ?? 'Unknown'
+  const industry = industryFromFmpProfile(p) ?? industryFromFmpProfile(q) ?? 'Unknown'
 
   const annualEps = pack.incomeAnnual
     .map((row) => pick(row, ['epsdiluted', 'eps']))

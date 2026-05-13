@@ -40,7 +40,7 @@ export function mapFmpSectorToProfile(sector: string, industry: string): FmpProf
     return { profileId: 'materials_mining_chemicals_paper_packaging', subIndustryHint: hint }
   }
 
-  if (s.includes('industrials')) {
+  if (s.includes('industrials') || s.includes('industrial')) {
     return { profileId: 'industrials_machinery_aerospace_transportation_construction', subIndustryHint: hint }
   }
 
