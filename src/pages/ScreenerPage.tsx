@@ -110,8 +110,7 @@ export default function ScreenerPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-moat-accent-dim">StockMoat</p>
           <h1 className="mt-2 font-display text-3xl md:text-4xl">Nightly screener</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Scores are written by the batch job (<span className="font-mono">npm run screen:nightly</span>) using the same FMP
-            pipeline as the analyzer. Data can be about a day behind FMP depending on when you last ran the job.
+            Scores are written by the nightly batch job. Data can be about a day behind the LIVE market. 
           </p>
         </div>
       </header>
