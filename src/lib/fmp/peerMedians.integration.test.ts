@@ -31,47 +31,74 @@ const evGpMetric: ProfileMetricDef = {
   peer_relative: true,
 }
 
-describe.skipIf(!fmpApiKey)('FMP peer EV / gross profit (integration)', () => {
+const evRevMetric: ProfileMetricDef = {
+  id: 'ev_to_revenue_vs_peer',
+  pillar: 'valuation',
+  pillar_weight: 0.1,
+  mode: 'score',
+  peer_relative: true,
+}
+
+const fcfYieldPeerMetric: ProfileMetricDef = {
+  id: 'fcf_yield_vs_peer',
+  pillar: 'valuation',
+  pillar_weight: 0.12,
+  mode: 'score',
+  peer_relative: true,
+}
+
+describe.skipIf(!fmpApiKey)('FMP peer valuation medians (integration)', () => {
   const apiKey = fmpApiKey
 
-  it('fetchPeerMedians returns a positive EV/gross profit median for MSFT peers', async () => {
+  it('fetchPeerMedians returns EV/GP, EV/revenue, and FCF yield medians for MSFT peers', async () => {
     const pack = await fetchCompanyRawPack('MSFT', apiKey)
     const medians = await fetchPeerMedians(pack.peers, apiKey, { subjectSymbol: 'MSFT' })
 
     expect(medians.n).toBeGreaterThan(0)
     expect(medians.enterpriseValueToGrossProfit).toBeDefined()
-    expect(Number.isFinite(medians.enterpriseValueToGrossProfit)).toBe(true)
     expect(medians.enterpriseValueToGrossProfit!).toBeGreaterThan(0)
+    expect(medians.enterpriseValueToRevenue).toBeDefined()
+    expect(medians.enterpriseValueToRevenue!).toBeGreaterThan(0)
+    expect(medians.fcfYield).toBeDefined()
+    expect(Number.isFinite(medians.fcfYield)).toBe(true)
   })
 
-  it('live evaluator shows peer median for MSFT (not unavailable)', async () => {
+  it('live evaluator shows peer medians for MSFT EV/GP, EV/revenue, and FCF yield', async () => {
     const pack = await fetchCompanyRawPack('MSFT', apiKey)
     const facts = buildCompanyFacts('MSFT', pack)
     const medians = await fetchPeerMedians(pack.peers, apiKey, { subjectSymbol: 'MSFT' })
     const snapshot = medians.n > 0 ? medians : null
 
     expect(snapshot?.enterpriseValueToGrossProfit).toBeDefined()
+    expect(snapshot?.enterpriseValueToRevenue).toBeDefined()
+    expect(snapshot?.fcfYield).toBeDefined()
     expect(facts.enterpriseValueToGrossProfit).toBeDefined()
-    expect(facts.enterpriseValueToGrossProfit!).toBeGreaterThan(0)
+    expect(facts.enterpriseValueToRevenue).toBeDefined()
+    expect(facts.fcfYield).toBeDefined()
 
     const evaluate = createLiveMetricEvaluator('MSFT', facts, snapshot)
-    const ev = evaluate(evGpMetric)
-    expect(ev.displayValue).toContain('vs peer median')
-    expect(ev.displayValue).not.toContain('peer median unavailable')
+    for (const m of [evGpMetric, evRevMetric, fcfYieldPeerMetric]) {
+      const row = evaluate(m)
+      expect(row.displayValue, m.id).toContain('vs peer median')
+      expect(row.displayValue, m.id).not.toContain('peer median unavailable')
+    }
   })
 
-  it('same for AAPL', async () => {
+  it('same medians + display for AAPL', async () => {
     const pack = await fetchCompanyRawPack('AAPL', apiKey)
     const facts = buildCompanyFacts('AAPL', pack)
     const medians = await fetchPeerMedians(pack.peers, apiKey, { subjectSymbol: 'AAPL' })
     const snapshot = medians.n > 0 ? medians : null
 
     expect(snapshot?.enterpriseValueToGrossProfit).toBeDefined()
-    expect(snapshot!.enterpriseValueToGrossProfit!).toBeGreaterThan(0)
+    expect(snapshot?.enterpriseValueToRevenue).toBeDefined()
+    expect(snapshot?.fcfYield).toBeDefined()
 
     const evaluate = createLiveMetricEvaluator('AAPL', facts, snapshot)
-    const ev = evaluate(evGpMetric)
-    expect(ev.displayValue).toContain('vs peer median')
-    expect(ev.displayValue).not.toContain('peer median unavailable')
+    for (const m of [evGpMetric, evRevMetric, fcfYieldPeerMetric]) {
+      const row = evaluate(m)
+      expect(row.displayValue, m.id).toContain('vs peer median')
+      expect(row.displayValue, m.id).not.toContain('peer median unavailable')
+    }
   })
 })

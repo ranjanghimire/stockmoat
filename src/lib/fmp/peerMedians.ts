@@ -65,10 +65,26 @@ function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
   return undefined
 }
 
-function extractPeerRow(km?: JsonRecord, incTtm?: JsonRecord, quote?: JsonRecord, incAnnual?: JsonRecord) {
+/** FMP sometimes returns yield as 2.5 (meaning 2.5%) instead of 0.025. */
+function normalizeYieldLikeRatio(v: number | undefined): number | undefined {
+  if (v === undefined || !Number.isFinite(v)) return undefined
+  if (v > 1.25 && v <= 100) return v / 100
+  return v
+}
+
+function extractPeerRow(
+  km?: JsonRecord,
+  incTtm?: JsonRecord,
+  quote?: JsonRecord,
+  incAnnual?: JsonRecord,
+  cfTtm?: JsonRecord,
+  cfAnnual?: JsonRecord,
+) {
   if (!km || fmpPayloadHasErrorMessage(km)) return undefined
   const q = quote && !fmpPayloadHasErrorMessage(quote) ? quote : undefined
   const ia = incAnnual && !fmpPayloadHasErrorMessage(incAnnual) ? incAnnual : undefined
+  const cft = cfTtm && !fmpPayloadHasErrorMessage(cfTtm) ? cfTtm : undefined
+  const cfa = cfAnnual && !fmpPayloadHasErrorMessage(cfAnnual) ? cfAnnual : undefined
   /** Key-metrics TTM often omits market cap / EV; quote almost always has marketCap. */
   const mktCap = pick(km, ['marketCap']) ?? pick(q, ['marketCap'])
   const shOut =
@@ -140,6 +156,11 @@ function extractPeerRow(km?: JsonRecord, incTtm?: JsonRecord, quote?: JsonRecord
     }
   }
 
+  if (revenue === undefined && ia) {
+    const rOnly = pick(ia, ['revenue', 'sales', 'totalRevenue'])
+    if (rOnly !== undefined) revenue = rOnly
+  }
+
   let enterpriseValue =
     pick(km, ['enterpriseValue', 'enterpriseValueTTM']) ?? pick(q, ['enterpriseValue'])
   if (enterpriseValue === undefined || !Number.isFinite(enterpriseValue)) {
@@ -179,11 +200,17 @@ function extractPeerRow(km?: JsonRecord, incTtm?: JsonRecord, quote?: JsonRecord
     revenueGrowth3Y = Math.abs(rawGrowth) <= 2 ? rawGrowth * 100 : rawGrowth
   }
 
-  let fcfYield = pick(km, ['freeCashFlowYield'])
-  const fcfAbs = pick(km, ['freeCashFlow'])
+  let fcfYield = normalizeYieldLikeRatio(
+    pick(km, ['freeCashFlowYield', 'fcfYield', 'freeCashFlowYieldTTM']),
+  )
+  const fcfAbs =
+    pick(km, ['freeCashFlow', 'freeCashFlowTTM']) ??
+    (cft ? pick(cft, ['freeCashFlow', 'freeCashFlowFromContinuingOperatingActivities']) : undefined) ??
+    (cfa ? pick(cfa, ['freeCashFlow', 'freeCashFlowFromContinuingOperatingActivities']) : undefined)
   if ((fcfYield === undefined || !Number.isFinite(fcfYield)) && fcfAbs !== undefined && mktCap !== undefined && mktCap > 1e-6) {
     fcfYield = fcfAbs / mktCap
   }
+  fcfYield = normalizeYieldLikeRatio(fcfYield)
 
   let roe = normalizeMarginRatio(pick(km, ['roe', 'returnOnEquity']))
   const netIncKm = pick(km, ['netIncome', 'netIncomeTTM'])
@@ -279,7 +306,7 @@ export async function fetchPeerMedians(
     const part = await Promise.all(
       batch.map(async (sym) => {
         try {
-          const [kmRaw, incTtmRaw, quoteRaw, incAnnRaw] = await Promise.all([
+          const [kmRaw, incTtmRaw, quoteRaw, incAnnRaw, cfTtmRaw, cfAnnRaw] = await Promise.all([
             fmpGet<unknown>(`/stable/key-metrics-ttm?symbol=${encodeURIComponent(sym)}`, apiKey),
             fmpGet<unknown>(`/stable/income-statement-ttm?symbol=${encodeURIComponent(sym)}`, apiKey).catch(
               () => null,
@@ -287,6 +314,13 @@ export async function fetchPeerMedians(
             fmpGet<unknown>(`/stable/quote?symbol=${encodeURIComponent(sym)}`, apiKey).catch(() => null),
             fmpGet<unknown>(
               `/stable/income-statement?symbol=${encodeURIComponent(sym)}&period=annual&limit=1`,
+              apiKey,
+            ).catch(() => null),
+            fmpGet<unknown>(`/stable/cash-flow-statement-ttm?symbol=${encodeURIComponent(sym)}`, apiKey).catch(
+              () => null,
+            ),
+            fmpGet<unknown>(
+              `/stable/cash-flow-statement?symbol=${encodeURIComponent(sym)}&period=annual&limit=1`,
               apiKey,
             ).catch(() => null),
           ])
@@ -302,7 +336,13 @@ export async function fetchPeerMedians(
           const annRows =
             incAnnRaw === null || fmpPayloadHasErrorMessage(incAnnRaw) ? [] : asArray<JsonRecord>(incAnnRaw)
           const incAnnual = firstRow(annRows)
-          return extractPeerRow(km, inc, qt, incAnnual)
+          const cfTtmRows =
+            cfTtmRaw === null || fmpPayloadHasErrorMessage(cfTtmRaw) ? [] : asArray<JsonRecord>(cfTtmRaw)
+          const cfTtm = firstRow(cfTtmRows)
+          const cfAnnRows =
+            cfAnnRaw === null || fmpPayloadHasErrorMessage(cfAnnRaw) ? [] : asArray<JsonRecord>(cfAnnRaw)
+          const cfAnnual = firstRow(cfAnnRows)
+          return extractPeerRow(km, inc, qt, incAnnual, cfTtm, cfAnnual)
         } catch {
           return undefined
         }
