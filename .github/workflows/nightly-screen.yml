@@ -1,0 +1,41 @@
+# Nightly batch: scores a universe via FMP and upserts into Supabase.
+#
+# Secrets (repo → Settings → Secrets and variables → Actions):
+#   FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# Optional env overrides in the workflow job below: SCREEN_MAX_TICKERS, SCREEN_TICKER_GAP_MS
+#
+# GitHub `schedule` events are not guaranteed to an exact minute; typical minimum cadence
+# for frequent crons is ~5 minutes. This workflow runs once per day (UTC).
+
+name: Nightly screen
+
+on:
+  schedule:
+    # 07:15 UTC daily — tweak as needed (cron uses UTC).
+    - cron: '15 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 720
+    env:
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Throttle FMP between tickers inside this run (ms). GitHub schedule min interval ~5m is separate.
+      SCREEN_TICKER_GAP_MS: '30000'
+      SCREEN_MAX_TICKERS: '1000'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run nightly screener
+        run: npm run screen:nightly
