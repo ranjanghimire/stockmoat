@@ -4,6 +4,9 @@
  *
  * Uses the **`yahoo-finance2`** npm package (Node/JS) on the Vite dev server — not Python **`yfinance`**.
  * Yahoo rate-limits unofficial callers; opt in with `VITE_USE_YAHOO=true` in `.env.local` and restart Vite.
+ *
+ * The home page **price charts** prefer **FMP** (~2y weekly + ~6mo daily OHLC from dividend-adjusted EOD),
+ * then **Yahoo** if FMP errors or no API key. Yahoo dev company pack still uses `VITE_USE_YAHOO` only.
  */
 export function isYahooDevProvider(): boolean {
   return import.meta.env.DEV && import.meta.env.VITE_USE_YAHOO === 'true'

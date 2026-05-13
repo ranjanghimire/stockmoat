@@ -17,7 +17,9 @@ import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
 import { mapFmpSectorToProfile } from '../lib/fmp/mapSectorToProfile'
 import { buildMoatFundamentalsSnapshot } from '../lib/moatFundamentalsSnapshot'
+import { fetchPriceCharts } from '../lib/fetchPriceCharts'
 import { fetchYahooCompanyPackDev } from '../lib/yahoo/fetchYahooCompanyPackDev'
+import type { PriceChartsPayload } from '../lib/yahoo/weeklyChartTypes'
 import { loadSectorProfiles } from '../lib/loadSectorProfiles'
 import { createLiveMetricEvaluator } from '../lib/liveMetricEvaluator'
 import { resolveProfileMetrics } from '../lib/resolveProfileMetrics'
@@ -28,6 +30,7 @@ import { MetricTable } from '../components/MetricTable'
 import { PillarBars } from '../components/PillarBars'
 import { PillarDetailPanel } from '../components/PillarDetailPanel'
 import { ScoreHero } from '../components/ScoreHero'
+import { PriceChartsPanel } from '../components/PriceChartsPanel'
 
 function formatProfileId(id: string): string {
   return id
@@ -62,6 +65,11 @@ export default function HomePage() {
   const [fromCache, setFromCache] = useState(false)
   const [selectedPillar, setSelectedPillar] = useState<string | null>(null)
   const analysisCacheRef = useRef(new Map<string, AnalysisCacheEntry>())
+  const chartRefreshRef = useRef(false)
+  const [priceCharts, setPriceCharts] = useState<PriceChartsPayload | null>(null)
+  const [priceChartsLoading, setPriceChartsLoading] = useState(false)
+  const [priceChartsError, setPriceChartsError] = useState<string | null>(null)
+  const [chartLoadGeneration, setChartLoadGeneration] = useState(0)
 
   const tickerFromParams = searchParams.get('ticker')?.trim().toUpperCase() ?? ''
   useEffect(() => {
@@ -188,6 +196,37 @@ export default function HomePage() {
     return () => window.clearTimeout(id)
   }, [runAnalysis])
 
+  useEffect(() => {
+    const sym = submitted.trim().toUpperCase() || 'MSFT'
+    const refresh = chartRefreshRef.current
+    chartRefreshRef.current = false
+    const ac = new AbortController()
+    const id = window.setTimeout(() => {
+      setPriceCharts(null)
+      setPriceChartsError(null)
+      setPriceChartsLoading(true)
+      void fetchPriceCharts(sym, { refresh, signal: ac.signal })
+        .then((d) => {
+          if (ac.signal.aborted) return
+          setPriceCharts(d)
+          setPriceChartsError(null)
+        })
+        .catch((e) => {
+          if (ac.signal.aborted) return
+          setPriceCharts(null)
+          setPriceChartsError(e instanceof Error ? e.message : 'Price charts failed to load.')
+        })
+        .finally(() => {
+          if (ac.signal.aborted) return
+          setPriceChartsLoading(false)
+        })
+    }, 0)
+    return () => {
+      window.clearTimeout(id)
+      ac.abort()
+    }
+  }, [submitted, chartLoadGeneration])
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const sym = tickerInput.trim().toUpperCase() || 'MSFT'
@@ -226,7 +265,11 @@ export default function HomePage() {
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => void runAnalysis({ forceRefresh: true })}
+                onClick={() => {
+                  chartRefreshRef.current = true
+                  setChartLoadGeneration((n) => n + 1)
+                  void runAnalysis({ forceRefresh: true })
+                }}
                 className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
                 title="Bypass in-memory cache and refetch from Yahoo or FMP"
               >
@@ -322,6 +365,13 @@ export default function HomePage() {
           </div>
         </section>
 
+        <PriceChartsPanel
+          ticker={submitted.trim().toUpperCase() || 'MSFT'}
+          data={priceCharts}
+          loading={priceChartsLoading}
+          error={priceChartsError}
+        />
+
         {analysis ? (
           <>
             <ScoreHero
@@ -369,11 +419,12 @@ export default function HomePage() {
 
       <footer className="border-t border-slate-200/80 bg-white/60 py-6 text-center text-xs text-slate-500 backdrop-blur">
         Client keeps a small in-memory analysis cache (10 min) per ticker/profile; use Refresh to bypass. FMP peer
-        medians load in dev by default (<span className="font-mono">VITE_FMP_FETCH_PEERS=false</span> to skip). Optional Yahoo (
-        <span className="font-mono">VITE_USE_YAHOO=true</span>) uses yahoo-finance2 on the Vite dev server. Production builds use FMP when{' '}
-        <span className="font-mono">fmpApiKey</span> is set at build time. Prefer a backend proxy so keys stay off public bundles. The{' '}
-        <span className="font-mono">/screen</span> view reads batch scores from Supabase when{' '}
-        <span className="font-mono">VITE_SUPABASE_URL</span> and <span className="font-mono">VITE_SUPABASE_ANON_KEY</span> are set.
+        medians load in dev by default (<span className="font-mono">VITE_FMP_FETCH_PEERS=false</span> to skip). Optional Yahoo
+        company pack (<span className="font-mono">VITE_USE_YAHOO=true</span>) uses yahoo-finance2 on the Vite dev server. Price
+        charts prefer FMP historical EOD (~2y weekly + ~6mo daily OHLC), then Yahoo if FMP fails or the key is missing. Production builds use FMP for fundamentals when <span className="font-mono">fmpApiKey</span> is set at
+        build time. Prefer a backend proxy so keys stay off public bundles. The <span className="font-mono">/screen</span> view
+        reads batch scores from Supabase when <span className="font-mono">VITE_SUPABASE_URL</span> and{' '}
+        <span className="font-mono">VITE_SUPABASE_ANON_KEY</span> are set.
       </footer>
     </div>
   )
