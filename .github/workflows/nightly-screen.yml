@@ -2,7 +2,7 @@
 #
 # Secrets (repo → Settings → Secrets and variables → Actions):
 #   FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-# Optional env overrides in the workflow job below: SCREEN_MAX_TICKERS, SCREEN_TICKER_GAP_MS
+# Optional env overrides in the workflow job below: SCREEN_MAX_TICKERS, SCREEN_TICKER_GAP_MS, SCREEN_OFFSET
 #
 # GitHub `schedule` events are not guaranteed to an exact minute; typical minimum cadence
 # for frequent crons is ~5 minutes. This workflow runs once per day (UTC).
@@ -26,6 +26,7 @@ jobs:
       # Throttle FMP between tickers inside this run (ms). GitHub schedule min interval ~5m is separate.
       SCREEN_TICKER_GAP_MS: '30000'
       SCREEN_MAX_TICKERS: '1000'
+      SCREEN_OFFSET: '0'
     steps:
       - uses: actions/checkout@v4
 
