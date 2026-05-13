@@ -41,12 +41,115 @@ async function sleep(ms: number): Promise<void> {
 }
 
 export function yahooDevCompanyPlugin(): Plugin {
-  const cache = new Map<string, { expires: number; json: string }>()
+  const companyCache = new Map<string, { expires: number; json: string }>()
+  const priceChartsCache = new Map<string, { expires: number; json: string }>()
 
   return {
     name: 'yahoo-dev-company-api',
     apply: 'serve',
     configureServer(server) {
+      server.middlewares.use(async (req: IncomingMessage, res, next) => {
+        if (!req.url?.startsWith('/api/dev/yahoo-price-charts')) {
+          next()
+          return
+        }
+        if (req.method !== 'GET') {
+          next()
+          return
+        }
+
+        try {
+          const url = new URL(req.url, 'http://localhost')
+          const sym = url.searchParams.get('symbol')?.trim().toUpperCase()
+          if (!sym) {
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'Missing symbol query param', code: 'BAD_REQUEST' }))
+            return
+          }
+
+          const now = Date.now()
+          const bypassCache = url.searchParams.get('refresh') === '1' || url.searchParams.get('refresh') === 'true'
+          const hit = !bypassCache ? priceChartsCache.get(sym) : undefined
+          if (hit && hit.expires > now) {
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(hit.json)
+            return
+          }
+
+          const [{ default: yahooFinance }, { priceChartsPayloadFromYahooChartPair }] = await Promise.all([
+            import('yahoo-finance2'),
+            import('./src/lib/yahoo/fetchYahooPriceCharts.ts'),
+          ])
+          try {
+            yahooFinance.suppressNotices(['yahooSurvey'])
+          } catch {
+            /* ignore */
+          }
+
+          const period2 = new Date()
+          const period1Weekly = new Date(period2.getTime() - 740 * 24 * 60 * 60 * 1000)
+          const period1Daily = new Date(period2.getTime() - 190 * 24 * 60 * 60 * 1000)
+
+          type ChartArr = {
+            meta: { currency?: string; symbol?: string }
+            quotes: Array<{
+              date?: Date
+              open?: number | null
+              high?: number | null
+              low?: number | null
+              close?: number | null
+              adjclose?: number | null
+            }>
+          }
+
+          let chartWk: ChartArr | undefined
+          let chartDy: ChartArr | undefined
+          for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
+            const wait = RETRY_DELAYS_MS[attempt]!
+            if (wait > 0) await sleep(wait)
+            try {
+              ;[chartWk, chartDy] = (await Promise.all([
+                yahooFinance.chart(sym, {
+                  interval: '1wk',
+                  period1: period1Weekly,
+                  period2,
+                  return: 'array',
+                }),
+                yahooFinance.chart(sym, {
+                  interval: '1d',
+                  period1: period1Daily,
+                  period2,
+                  return: 'array',
+                }),
+              ])) as [ChartArr, ChartArr]
+              break
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e)
+              const canRetry = attempt < RETRY_DELAYS_MS.length - 1 && isRetryableYahooFailure(msg)
+              if (!canRetry) throw e
+            }
+          }
+          if (chartWk === undefined || chartDy === undefined) {
+            throw new Error('Yahoo chart returned no data after retries')
+          }
+
+          const payload = priceChartsPayloadFromYahooChartPair(chartWk, chartDy, sym)
+          const json = JSON.stringify(payload)
+          priceChartsCache.set(sym, { expires: now + CACHE_MS, json })
+
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(json)
+        } catch (e) {
+          const { status, payload } = publicYahooError(e)
+          res.statusCode = status
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(payload))
+        }
+      })
+
       server.middlewares.use(async (req: IncomingMessage, res, next) => {
         if (!req.url?.startsWith('/api/dev/yahoo-company')) {
           next()
@@ -69,7 +172,7 @@ export function yahooDevCompanyPlugin(): Plugin {
 
           const now = Date.now()
           const bypassCache = url.searchParams.get('refresh') === '1' || url.searchParams.get('refresh') === 'true'
-          const hit = !bypassCache ? cache.get(sym) : undefined
+          const hit = !bypassCache ? companyCache.get(sym) : undefined
           if (hit && hit.expires > now) {
             res.statusCode = 200
             res.setHeader('Content-Type', 'application/json')
@@ -120,7 +223,7 @@ export function yahooDevCompanyPlugin(): Plugin {
 
           const pack = mapQuoteSummaryToCompanyRawPack(sym, summary)
           const json = JSON.stringify(pack)
-          cache.set(sym, { expires: now + CACHE_MS, json })
+          companyCache.set(sym, { expires: now + CACHE_MS, json })
 
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
