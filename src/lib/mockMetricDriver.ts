@@ -8,6 +8,8 @@ export interface MetricEval {
   peerNote?: string
   /** When mode is gate and gatePass is true, scales contribution (defaults to 1). */
   gateCredit?: number
+  /** Human-readable inputs / formulas / caveats for the metric table. */
+  breakdown?: string[]
 }
 
 function peerLine(ticker: string, id: string, peerRelative?: boolean): string | undefined {
@@ -33,6 +35,7 @@ export function evaluateMetricDemo(
     gatePass: r > 0.18,
     displayValue: `${(r * 100).toFixed(0)}% (mock index)`,
     peerNote,
+    breakdown: ['Demo/mock value from ticker hash — not live FMP-derived.'],
   })
 
   switch (metricId) {
@@ -45,6 +48,7 @@ export function evaluateMetricDemo(
         gatePass: f >= 4,
         displayValue: `${f} / 9`,
         peerNote,
+        breakdown: ['Demo/mock Piotroski-style score from ticker hash.'],
       }
     }
     case 'cet1_or_tier1_capital_vs_requirement': {
@@ -55,6 +59,7 @@ export function evaluateMetricDemo(
         gatePass: pass,
         displayValue: pass ? 'Meets buffer vs requirement' : 'Below internal buffer (demo)',
         peerNote,
+        breakdown: ['Demo regulatory buffer (mock).'],
       }
     }
     case 'debt_to_capital': {
@@ -66,6 +71,7 @@ export function evaluateMetricDemo(
         gatePass: pass,
         displayValue: `${dc}x (demo)`,
         peerNote,
+        breakdown: ['Demo debt/capital gate (mock).'],
       }
     }
     case 'net_debt_to_ebitda':
@@ -79,6 +85,7 @@ export function evaluateMetricDemo(
         gatePass: pass,
         displayValue: `${nd}x (demo)`,
         peerNote,
+        breakdown: ['Demo leverage vs EBITDA (mock).'],
       }
     }
     case 'interest_coverage': {
@@ -90,6 +97,7 @@ export function evaluateMetricDemo(
         gatePass: pass,
         displayValue: `${ic}x (demo)`,
         peerNote,
+        breakdown: ['Demo interest coverage (mock).'],
       }
     }
     case 'fcf_positive_ttm': {
@@ -100,6 +108,7 @@ export function evaluateMetricDemo(
         gatePass: pos,
         displayValue: pos ? 'FCF > 0 (TTM, demo)' : 'FCF ≤ 0 (TTM, demo)',
         peerNote,
+        breakdown: ['Demo FCF sign from yield (mock).'],
       }
     }
     case 'forward_pe_vs_trailing_pe': {
@@ -110,6 +119,7 @@ export function evaluateMetricDemo(
         gatePass: true,
         displayValue: fwdLower ? 'Forward < trailing (demo)' : 'Forward ≥ trailing (demo)',
         peerNote,
+        breakdown: ['Demo forward vs trailing P/E (mock).'],
       }
     }
     case 'peg_ttm': {
@@ -120,6 +130,7 @@ export function evaluateMetricDemo(
         gatePass: true,
         displayValue: peg,
         peerNote,
+        breakdown: ['Demo PEG (mock).'],
       }
     }
     case 'rule_of_40': {
@@ -130,6 +141,7 @@ export function evaluateMetricDemo(
         gatePass: true,
         displayValue: `${rf}% (demo, rev growth + margin)`,
         peerNote,
+        breakdown: ['Demo Rule of 40 (mock).'],
       }
     }
     case 'eps_yoy_growth_2_of_3': {
@@ -140,6 +152,7 @@ export function evaluateMetricDemo(
         gatePass: true,
         displayValue: ok ? 'Met in ≥2 of last 3 years (demo)' : 'Weak EPS growth pattern (demo)',
         peerNote,
+        breakdown: ['Demo EPS growth pattern (mock).'],
       }
     }
     default:

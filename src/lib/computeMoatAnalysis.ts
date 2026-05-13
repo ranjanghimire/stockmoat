@@ -10,6 +10,9 @@ export interface MetricRow extends ProfileMetricDef {
   displayValue: string
   peerNote?: string
   gateCredit?: number
+  breakdown?: string[]
+  /** Points toward the 0–1 weighted sum (weight × subscore or gate credit). */
+  weightedContribution: number
 }
 
 export interface PillarRollup {
@@ -63,6 +66,9 @@ export function computeMoatAnalysis(
       rawWeighted += m.pillar_weight * ev.subscore
     }
 
+    const weightedContribution =
+      m.mode === 'gate' ? m.pillar_weight * (ev.gatePass ? (ev.gateCredit ?? 1) : 0) : m.pillar_weight * ev.subscore
+
     rows.push({
       ...m,
       label,
@@ -71,6 +77,8 @@ export function computeMoatAnalysis(
       displayValue: ev.displayValue,
       peerNote: ev.peerNote,
       gateCredit: ev.gateCredit,
+      breakdown: ev.breakdown,
+      weightedContribution,
     })
   }
 

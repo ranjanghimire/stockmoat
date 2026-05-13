@@ -12,8 +12,15 @@ export interface PeerMedians {
   priceToBook?: number
   peTrailing?: number
   operatingMargin?: number
+  ebitdaMargin?: number
   enterpriseValueToRevenue?: number
   enterpriseValueToGrossProfit?: number
+  /** Implied price / FFO from market cap ÷ shares ÷ FFO per share (key-metrics TTM). */
+  priceToFfo?: number
+  bankEfficiencyRatio?: number
+  nonPerformingLoansRatio?: number
+  /** FMP growth fields normalized to ~percent points when possible. */
+  revenueGrowth3Y?: number
 }
 
 function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
@@ -41,6 +48,24 @@ function extractPeerRow(km?: JsonRecord) {
     enterpriseValueToRevenue = enterpriseValue / revenue
   }
 
+  const mktCap = pick(km, ['marketCap'])
+  const shOut = pick(km, ['weightedAverageShsOutDil', 'weightedAverageShsOut'])
+  const impliedPrice =
+    mktCap !== undefined && shOut !== undefined && shOut > 0 ? mktCap / shOut : undefined
+  const ffoPs = pick(km, ['ffoPerShareTTM', 'fundsFromOperationsPerShareTTM', 'operatingCashFlowPerShareTTM'])
+  let priceToFfo: number | undefined
+  if (impliedPrice !== undefined && ffoPs !== undefined && ffoPs > 0) {
+    priceToFfo = impliedPrice / ffoPs
+  }
+
+  const bankEfficiencyRatio = pick(km, ['bankEfficiencyRatio', 'efficiencyRatio'])
+
+  const rawGrowth = pick(km, ['revenueGrowth3Y', 'threeYRevenueGrowthPerShare', 'growthThreeY'])
+  let revenueGrowth3Y: number | undefined
+  if (rawGrowth !== undefined) {
+    revenueGrowth3Y = Math.abs(rawGrowth) <= 2 ? rawGrowth * 100 : rawGrowth
+  }
+
   return {
     evToEbitda: pick(km, ['enterpriseValueOverEBITDA', 'evToEBITDATTM']),
     evToEbit: pick(km, ['enterpriseValueOverEBIT', 'evToEBITTTM']),
@@ -51,8 +76,13 @@ function extractPeerRow(km?: JsonRecord) {
     priceToBook: pick(km, ['pbRatio', 'priceToBookRatio']),
     peTrailing: pick(km, ['peRatio']),
     operatingMargin: pick(km, ['operatingProfitMargin']),
+    ebitdaMargin: pick(km, ['ebitdaMargin']),
     enterpriseValueToRevenue,
     enterpriseValueToGrossProfit,
+    priceToFfo,
+    bankEfficiencyRatio,
+    nonPerformingLoansRatio: pick(km, ['nonPerformingLoansToLoansRatio', 'nonPerformingLoansRatio', 'nplRatio']),
+    revenueGrowth3Y,
   }
 }
 
@@ -98,11 +128,22 @@ export async function fetchPeerMedians(
   const operatingMargin = median(
     valid.map((v) => v.operatingMargin).filter((v): v is number => v !== undefined),
   )
+  const ebitdaMargin = median(valid.map((v) => v.ebitdaMargin).filter((v): v is number => v !== undefined))
   const enterpriseValueToRevenue = median(
     valid.map((v) => v.enterpriseValueToRevenue).filter((v): v is number => v !== undefined && v > 0),
   )
   const enterpriseValueToGrossProfit = median(
     valid.map((v) => v.enterpriseValueToGrossProfit).filter((v): v is number => v !== undefined && v > 0),
+  )
+  const priceToFfo = median(valid.map((v) => v.priceToFfo).filter((v): v is number => v !== undefined && v > 0))
+  const bankEfficiencyRatio = median(
+    valid.map((v) => v.bankEfficiencyRatio).filter((v): v is number => v !== undefined && v > 0),
+  )
+  const nonPerformingLoansRatio = median(
+    valid.map((v) => v.nonPerformingLoansRatio).filter((v): v is number => v !== undefined && v >= 0),
+  )
+  const revenueGrowth3Y = median(
+    valid.map((v) => v.revenueGrowth3Y).filter((v): v is number => v !== undefined),
   )
 
   return {
@@ -116,7 +157,12 @@ export async function fetchPeerMedians(
     priceToBook,
     peTrailing,
     operatingMargin,
+    ebitdaMargin,
     enterpriseValueToRevenue,
     enterpriseValueToGrossProfit,
+    priceToFfo,
+    bankEfficiencyRatio,
+    nonPerformingLoansRatio,
+    revenueGrowth3Y,
   }
 }
