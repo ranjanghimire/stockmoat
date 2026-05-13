@@ -171,14 +171,7 @@ export default function App() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-moat-accent-dim">StockMoat</p>
             <h1 className="mt-2 font-display text-4xl md:text-5xl">Find the quiet value</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
-              Single-ticker view powered by your sector YAML. In <span className="font-medium">dev</span>, defaults
-              to <span className="font-medium">Financial Modeling Prep</span> when <span className="font-mono">fmpApiKey</span> is in{' '}
-              <span className="font-mono">.env.local</span> (peer medians load in dev by default; set{' '}
-              <span className="font-mono">VITE_FMP_FETCH_PEERS=false</span> to skip). Optional:{' '}
-              <span className="font-mono">VITE_USE_YAHOO=true</span> uses the <span className="font-medium">yahoo-finance2</span>{' '}
-              Node package (not Python yfinance) via one Vite server call — Yahoo may rate-limit.
-            </p>
+
           </div>
           <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
             <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3 md:flex-row md:items-center">
@@ -252,11 +245,7 @@ export default function App() {
                 Manual profile
               </button>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Auto maps <span className="font-medium">sector / industry</span> strings into the closest YAML profile
-              (from FMP in dev, or Yahoo when <span className="font-mono">VITE_USE_YAHOO=true</span>). Manual overrides
-              that mapping (still uses the same live fundamentals source).
-            </p>
+            
           </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="profile">
