@@ -1,8 +1,8 @@
 import type { CompanyRawPack } from '../fmp/fetchCompanyRawPack'
 
 /**
- * One browser round-trip → Vite dev middleware runs `yahoo-finance2.quoteSummary` once
- * and returns a FMP-shaped `CompanyRawPack` (no FMP key usage).
+ * One browser round-trip → Vite dev middleware runs **`yahoo-finance2`** (Node) `quoteSummary` once
+ * and returns a FMP-shaped `CompanyRawPack`. This is not Python **yfinance**; Yahoo may rate-limit.
  */
 export async function fetchYahooCompanyPackDev(symbol: string): Promise<CompanyRawPack> {
   const sym = symbol.trim().toUpperCase()

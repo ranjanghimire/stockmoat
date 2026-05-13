@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly FMP_API_KEY: string
+  readonly VITE_USE_YAHOO?: string
+  readonly VITE_FMP_FETCH_PEERS?: string
 }
 
 interface ImportMeta {

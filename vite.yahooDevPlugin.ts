@@ -23,7 +23,7 @@ function publicYahooError(e: unknown): { status: number; payload: { error: strin
       payload: {
         code: 'YAHOO_RATE_LIMIT',
         error:
-          'Yahoo Finance rate-limited this request (plain-text "Too Many Requests" or similar). Wait 1–2 minutes, try again, or use FMP: set VITE_USE_FMP=true and fmpApiKey in .env.local, then restart Vite.',
+          'Yahoo Finance rate-limited this request (unofficial API; `yahoo-finance2` in Node — not Python yfinance). Wait and retry, or unset VITE_USE_YAHOO and use FMP: add fmpApiKey to .env.local, restart Vite.',
       },
     }
   }

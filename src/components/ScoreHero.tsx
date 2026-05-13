@@ -12,7 +12,7 @@ interface ScoreHeroProps {
 
 function dataSourceLabel(ds: string | undefined): string {
   if (ds === 'fmp') return 'Financial Modeling Prep (live)'
-  if (ds === 'yahoo_dev') return 'Yahoo Finance (dev — one server call, no peer medians)'
+  if (ds === 'yahoo_dev') return 'Yahoo Finance (dev — yahoo-finance2 / one server call; not Python yfinance)'
   return 'demo / offline'
 }
 

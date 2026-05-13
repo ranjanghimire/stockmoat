@@ -1,6 +1,12 @@
-/** In dev, use Yahoo via the Vite dev server unless `VITE_USE_FMP=true` in `.env.local`. */
+/**
+ * Optional Yahoo path in **dev only** (experimental).
+ *
+ * Uses the **`yahoo-finance2`** npm package (Node/JS) on the Vite dev server — not Python **`yfinance`**.
+ * Yahoo rate-limits unofficial callers heavily, so this is **opt-in**: set `VITE_USE_YAHOO=true` in `.env.local`
+ * and restart Vite. Default dev behavior is FMP when `fmpApiKey` is set (see `shouldFetchFmpPeerMedians`).
+ */
 export function isYahooDevProvider(): boolean {
-  return import.meta.env.DEV && import.meta.env.VITE_USE_FMP !== 'true'
+  return import.meta.env.DEV && import.meta.env.VITE_USE_YAHOO === 'true'
 }
 
 /**

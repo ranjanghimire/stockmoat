@@ -114,7 +114,7 @@ function earningsTrendToEstimates(earningsTrend: unknown): JsonRecord[] {
 
 /**
  * Maps a yahoo-finance2 `quoteSummary` result (single `result[0]` object) into the FMP-shaped pack
- * consumed by `buildCompanyFacts`.
+ * consumed by `buildCompanyFacts`. (Package: **yahoo-finance2** for Node — not Python **yfinance**.)
  */
 export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown): CompanyRawPack {
   const s = summary as JsonRecord

@@ -39,7 +39,7 @@ export default function App() {
 
     if (!useYahoo && !fmpKey) {
       setError(
-        'Missing FMP API key. For dev you can use Yahoo instead: leave `VITE_USE_FMP` unset and run `npm run dev`. To use FMP, add fmpApiKey=YOUR_KEY to .env.local and set VITE_USE_FMP=true, then restart Vite.',
+        'Missing FMP API key. Add fmpApiKey=YOUR_KEY to .env.local and restart Vite (default dev path). Optional: set VITE_USE_YAHOO=true to try Yahoo via the yahoo-finance2 package (not Python yfinance) — Yahoo often rate-limits and may fail.',
       )
       setAnalysis(null)
       return
@@ -120,10 +120,11 @@ export default function App() {
             <h1 className="mt-2 font-display text-4xl md:text-5xl">Find the quiet value</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
               Single-ticker view powered by your sector YAML. In <span className="font-medium">dev</span>, defaults
-              to <span className="font-medium">Yahoo Finance</span> via one Vite server call (no FMP peer fan-out). Set{' '}
-              <span className="font-mono">VITE_USE_FMP=true</span> and an FMP key in <span className="font-mono">.env.local</span>{' '}
-              to use Financial Modeling Prep. Optional: <span className="font-mono">VITE_FMP_FETCH_PEERS=true</span>{' '}
-              in dev to restore peer median requests when on FMP.
+              to <span className="font-medium">Financial Modeling Prep</span> when <span className="font-mono">fmpApiKey</span> is in{' '}
+              <span className="font-mono">.env.local</span> (peer medians off unless{' '}
+              <span className="font-mono">VITE_FMP_FETCH_PEERS=true</span>). Optional:{' '}
+              <span className="font-mono">VITE_USE_YAHOO=true</span> uses the <span className="font-medium">yahoo-finance2</span>{' '}
+              Node package (not Python yfinance) via one Vite server call — Yahoo may rate-limit.
             </p>
           </div>
           <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
@@ -183,7 +184,7 @@ export default function App() {
             </div>
             <p className="mt-2 text-xs text-slate-500">
               Auto maps <span className="font-medium">sector / industry</span> strings into the closest YAML profile
-              (from Yahoo in dev, or FMP when <span className="font-mono">VITE_USE_FMP=true</span>). Manual overrides
+              (from FMP in dev, or Yahoo when <span className="font-mono">VITE_USE_YAHOO=true</span>). Manual overrides
               that mapping (still uses the same live fundamentals source).
             </p>
           </div>
@@ -241,9 +242,9 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white/60 py-6 text-center text-xs text-slate-500 backdrop-blur">
-        Data: dev defaults to Yahoo Finance through the Vite dev server; production builds use FMP when{' '}
-        <span className="font-mono">fmpApiKey</span> is set at build time. Prefer a backend proxy so keys stay off public
-        bundles.
+        Dev uses FMP when a key is present; optional Yahoo (<span className="font-mono">VITE_USE_YAHOO=true</span>) uses
+        yahoo-finance2 on the Vite dev server. Production builds use FMP when <span className="font-mono">fmpApiKey</span>{' '}
+        is set at build time. Prefer a backend proxy so keys stay off public bundles.
       </footer>
     </div>
   )
