@@ -23,6 +23,8 @@ export interface PeerMedians {
   revenueGrowth3Y?: number
 }
 
+export const EMPTY_PEER_MEDIANS: PeerMedians = { n: 0 }
+
 function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
   if (!o) return undefined
   for (const k of keys) {

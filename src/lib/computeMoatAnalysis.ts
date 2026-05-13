@@ -34,7 +34,7 @@ export interface MoatAnalysis {
   pillars: PillarRollup[]
   sector?: string
   industry?: string
-  dataSource: 'fmp' | 'demo'
+  dataSource: 'fmp' | 'demo' | 'yahoo_dev'
 }
 
 export function computeMoatAnalysis(
@@ -44,7 +44,7 @@ export function computeMoatAnalysis(
   metricsInput: ProfileMetricDef[],
   itVariant: string | undefined,
   evaluateMetric: (m: ProfileMetricDef) => MetricEval,
-  meta?: { sector?: string; industry?: string; dataSource?: 'fmp' | 'demo' },
+  meta?: { sector?: string; industry?: string; dataSource?: 'fmp' | 'demo' | 'yahoo_dev' },
 ): MoatAnalysis {
   const root = loadSectorProfiles()
   const metrics = normalizeMetricWeights(metricsInput)

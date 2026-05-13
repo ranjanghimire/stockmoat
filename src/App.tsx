@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { computeMoatAnalysis, type MoatAnalysis } from './lib/computeMoatAnalysis'
 import { DEMO_TICKERS, PROFILE_ORDER } from './lib/demoTickerMap'
+import { isYahooDevProvider, shouldFetchFmpPeerMedians } from './lib/dataSource'
 import { buildCompanyFacts } from './lib/fmp/buildCompanyFacts'
 import { fetchCompanyRawPack } from './lib/fmp/fetchCompanyRawPack'
+import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from './lib/fmp/peerMedians'
 import { getFmpApiKey } from './lib/fmp/http'
 import { mapFmpSectorToProfile } from './lib/fmp/mapSectorToProfile'
-import { fetchPeerMedians } from './lib/fmp/peerMedians'
+import { fetchYahooCompanyPackDev } from './lib/yahoo/fetchYahooCompanyPackDev'
 import { loadSectorProfiles } from './lib/loadSectorProfiles'
 import { createLiveMetricEvaluator } from './lib/liveMetricEvaluator'
 import { resolveProfileMetrics } from './lib/resolveProfileMetrics'
@@ -32,10 +34,12 @@ export default function App() {
 
   const runAnalysis = useCallback(async () => {
     const sym = submitted.trim().toUpperCase() || 'MSFT'
-    const apiKey = getFmpApiKey()
-    if (!apiKey) {
+    const useYahoo = isYahooDevProvider()
+    const fmpKey = getFmpApiKey()
+
+    if (!useYahoo && !fmpKey) {
       setError(
-        'Missing FMP API key. Add fmpApiKey=YOUR_KEY to .env.local (project root) and restart the dev server so Vite can inject it.',
+        'Missing FMP API key. For dev you can use Yahoo instead: leave `VITE_USE_FMP` unset and run `npm run dev`. To use FMP, add fmpApiKey=YOUR_KEY to .env.local and set VITE_USE_FMP=true, then restart Vite.',
       )
       setAnalysis(null)
       return
@@ -44,9 +48,14 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const pack = await fetchCompanyRawPack(sym, apiKey)
+      const pack = useYahoo ? await fetchYahooCompanyPackDev(sym) : await fetchCompanyRawPack(sym, fmpKey)
+
       const facts = buildCompanyFacts(sym, pack)
-      const peerMedians = await fetchPeerMedians(pack.peers, apiKey)
+      const peerMedians = useYahoo
+        ? EMPTY_PEER_MEDIANS
+        : shouldFetchFmpPeerMedians()
+          ? await fetchPeerMedians(pack.peers, fmpKey)
+          : EMPTY_PEER_MEDIANS
 
       const routing =
         profileMode === 'auto'
@@ -74,13 +83,17 @@ export default function App() {
         resolved.metrics,
         resolved.itVariant,
         evaluate,
-        { sector: facts.sector, industry: facts.industry, dataSource: 'fmp' },
+        {
+          sector: facts.sector,
+          industry: facts.industry,
+          dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
+        },
       )
 
       setAnalysis(result)
     } catch (e) {
       setAnalysis(null)
-      setError(e instanceof Error ? e.message : 'Something went wrong while calling FMP.')
+      setError(e instanceof Error ? e.message : 'Something went wrong while loading market data.')
     } finally {
       setLoading(false)
     }
@@ -106,9 +119,11 @@ export default function App() {
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-moat-accent-dim">StockMoat</p>
             <h1 className="mt-2 font-display text-4xl md:text-5xl">Find the quiet value</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
-              Single-ticker view powered by <span className="font-medium">Financial Modeling Prep</span> and your
-              sector YAML. Peer medians use FMP&apos;s stock peer list plus each peer&apos;s key-metrics TTM (bounded
-              requests for free-tier safety).
+              Single-ticker view powered by your sector YAML. In <span className="font-medium">dev</span>, defaults
+              to <span className="font-medium">Yahoo Finance</span> via one Vite server call (no FMP peer fan-out). Set{' '}
+              <span className="font-mono">VITE_USE_FMP=true</span> and an FMP key in <span className="font-mono">.env.local</span>{' '}
+              to use Financial Modeling Prep. Optional: <span className="font-mono">VITE_FMP_FETCH_PEERS=true</span>{' '}
+              in dev to restore peer median requests when on FMP.
             </p>
           </div>
           <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
@@ -152,7 +167,7 @@ export default function App() {
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                Auto (FMP sector map)
+                Auto (sector map)
               </button>
               <button
                 type="button"
@@ -167,8 +182,9 @@ export default function App() {
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Auto maps FMP <span className="font-medium">sector / industry</span> strings into the closest YAML
-              profile. Manual overrides that mapping (still uses live FMP fundamentals for the ticker).
+              Auto maps <span className="font-medium">sector / industry</span> strings into the closest YAML profile
+              (from Yahoo in dev, or FMP when <span className="font-mono">VITE_USE_FMP=true</span>). Manual overrides
+              that mapping (still uses the same live fundamentals source).
             </p>
           </div>
           <div>
@@ -212,22 +228,22 @@ export default function App() {
             <MetricTable analysis={analysis} />
           </>
         ) : !loading && !error ? (
-          <p className="text-sm text-slate-600">Enter a ticker to load FMP data.</p>
+          <p className="text-sm text-slate-600">Enter a ticker to load data.</p>
         ) : null}
 
         <section className="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-6 text-sm text-slate-600">
           <h3 className="font-display text-lg text-moat-ink">Sample tickers (demo routing hints)</h3>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            {Object.keys(DEMO_TICKERS).join(', ')} — IT names still respect FMP industry for the software vs semis
+            {Object.keys(DEMO_TICKERS).join(', ')} — IT names still respect industry strings for the software vs semis
             split when auto profile is Information Technology.
           </p>
         </section>
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white/60 py-6 text-center text-xs text-slate-500 backdrop-blur">
-        Data from Financial Modeling Prep. API key is injected at build/dev time from <span className="font-mono">.env.local</span>{' '}
-        (<span className="font-mono">fmpApiKey</span>). For production, prefer a small backend proxy so the key stays
-        off the public bundle.
+        Data: dev defaults to Yahoo Finance through the Vite dev server; production builds use FMP when{' '}
+        <span className="font-mono">fmpApiKey</span> is set at build time. Prefer a backend proxy so keys stay off public
+        bundles.
       </footer>
     </div>
   )

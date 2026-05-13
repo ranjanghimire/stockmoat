@@ -5,9 +5,15 @@ interface ScoreHeroProps {
   profileLabel: string
   anyGateFail: boolean
   scoreCap: number
-  dataSource?: 'fmp' | 'demo'
+  dataSource?: 'fmp' | 'demo' | 'yahoo_dev'
   sector?: string
   industry?: string
+}
+
+function dataSourceLabel(ds: string | undefined): string {
+  if (ds === 'fmp') return 'Financial Modeling Prep (live)'
+  if (ds === 'yahoo_dev') return 'Yahoo Finance (dev — one server call, no peer medians)'
+  return 'demo / offline'
 }
 
 export function ScoreHero({
@@ -37,13 +43,11 @@ export function ScoreHero({
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
             Sector profile: <span className="font-medium text-moat-ink">{profileLabel}</span>. Data:{' '}
-            <span className="font-medium text-moat-ink">
-              {dataSource === 'fmp' ? 'Financial Modeling Prep (live)' : 'demo / offline'}
-            </span>
+            <span className="font-medium text-moat-ink">{dataSourceLabel(dataSource)}</span>
             {sector ? (
               <>
                 {' '}
-                · FMP sector <span className="font-medium text-moat-ink">{sector}</span>
+                · Sector <span className="font-medium text-moat-ink">{sector}</span>
                 {industry ? (
                   <>
                     {' '}
