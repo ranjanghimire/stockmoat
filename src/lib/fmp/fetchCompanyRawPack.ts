@@ -1,6 +1,9 @@
 import { fmpGet } from './http'
 import { asArray, firstRow, type JsonRecord } from './normalize'
 
+/** FMP free/starter plans reject `limit` > 5 on statement endpoints (402). */
+const FMP_ANNUAL_STATEMENT_LIMIT = 5
+
 export interface CompanyRawPack {
   profile: JsonRecord | undefined
   quote: JsonRecord | undefined
@@ -63,8 +66,14 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     fmpGet<unknown>(`/stable/quote?symbol=${q}`, apiKey),
     fmpGet<unknown>(`/stable/key-metrics-ttm?symbol=${q}`, apiKey),
     fmpGet<unknown>(`/stable/ratios-ttm?symbol=${q}`, apiKey),
-    fmpGet<unknown>(`/stable/income-statement?symbol=${q}&period=annual&limit=8`, apiKey),
-    fmpGet<unknown>(`/stable/cash-flow-statement?symbol=${q}&period=annual&limit=8`, apiKey),
+    fmpGet<unknown>(
+      `/stable/income-statement?symbol=${q}&period=annual&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
+      apiKey,
+    ),
+    fmpGet<unknown>(
+      `/stable/cash-flow-statement?symbol=${q}&period=annual&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
+      apiKey,
+    ),
     fmpGet<unknown>(`/stable/financial-scores?symbol=${q}`, apiKey).catch(() => null),
     fmpGet<unknown>(`/stable/stock-peers?symbol=${q}`, apiKey).catch(() => null),
   ])
