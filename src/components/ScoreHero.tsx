@@ -28,6 +28,8 @@ export function ScoreHero({
   industry,
 }: ScoreHeroProps) {
   const hue = Math.round(120 - (score / 10) * 70)
+  const yahooSymbol = ticker.trim().toUpperCase().replace(/\./g, '-')
+  const yahooFinanceUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol)}/`
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-white/80 p-8 shadow-xl shadow-slate-900/5 backdrop-blur-md">
       <div
@@ -56,6 +58,16 @@ export function ScoreHero({
                 ) : null}
               </>
             ) : null}
+            <br />
+            <a
+              href={yahooFinanceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-moat-accent underline decoration-moat-accent/30 underline-offset-2 transition hover:text-moat-accent-dim hover:decoration-moat-accent-dim"
+            >
+              {'Quote & news on Yahoo Finance'}
+            </a>
+            <span className="text-slate-400"> (opens in new tab)</span>
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 md:items-end">

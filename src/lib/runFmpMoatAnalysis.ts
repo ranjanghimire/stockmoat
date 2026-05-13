@@ -70,7 +70,7 @@ export async function runFmpMoatAnalysis(
       sector: facts.sector,
       industry: facts.industry,
       dataSource: 'fmp',
-      fundamentals: buildMoatFundamentalsSnapshot(facts),
+      fundamentals: buildMoatFundamentalsSnapshot(facts, pack),
     },
   )
 }

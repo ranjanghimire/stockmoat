@@ -3,7 +3,8 @@
  *   npm run screen:nightly
  *
  * Requires in .env / .env.local: fmpApiKey, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * Optional: SCREEN_MAX_TICKERS (default 50), SCREEN_TICKER_GAP_MS (default 30000)
+ * Optional: SCREEN_MAX_TICKERS (default 50), SCREEN_TICKER_GAP_MS (default 30000),
+ * SCREEN_OFFSET (default 0) — skip this many symbols from the start of the universe for batched runs.
  */
 import { config as loadDotenv } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
@@ -36,10 +37,17 @@ async function main(): Promise<void> {
   }
 
   const maxTickers = Math.max(1, Number.parseInt(env('SCREEN_MAX_TICKERS', '50'), 10) || 50)
+  const offset = Math.max(0, Number.parseInt(env('SCREEN_OFFSET', '0'), 10) || 0)
   const gapMs = Math.max(0, Number.parseInt(env('SCREEN_TICKER_GAP_MS', '30000'), 10) || 0)
 
-  const symbols = await fetchScreenUniverse(fmpKey, maxTickers)
-  console.log(`Universe: ${symbols.length} symbols (cap ${maxTickers}). Gap ${gapMs}ms between tickers.`)
+  const symbols = await fetchScreenUniverse(fmpKey, { maxTickers, offset })
+  console.log(
+    `Universe: ${symbols.length} symbols (max ${maxTickers}, offset ${offset}). Gap ${gapMs}ms between tickers.`,
+  )
+  if (symbols.length === 0) {
+    console.log('Nothing to do — raise SCREEN_MAX_TICKERS or lower SCREEN_OFFSET.')
+    return
+  }
 
   const sb = createClient(supabaseUrl, serviceKey)
 
@@ -76,6 +84,13 @@ async function main(): Promise<void> {
   }
 
   console.log(`Done. OK ${ok}, failed ${fail}.`)
+  if (symbols.length > 0 && symbols.length === maxTickers) {
+    console.log(
+      `Next batch (same order): SCREEN_OFFSET=${offset + maxTickers} with the same SCREEN_MAX_TICKERS=${maxTickers}, or raise SCREEN_MAX_TICKERS to score more per run.`,
+    )
+  } else if (symbols.length > 0 && symbols.length < maxTickers) {
+    console.log('Returned fewer than maxTickers — universe slice may be at the end or the API returned a short page.')
+  }
 }
 
 main().catch((e) => {
