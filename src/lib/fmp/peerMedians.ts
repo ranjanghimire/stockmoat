@@ -1,4 +1,5 @@
 import { fmpGet } from './http'
+import { fmpPayloadHasErrorMessage } from './profileClassification'
 import { asArray, firstRow, median, num, normalizeMarginRatio, type JsonRecord } from './normalize'
 
 export interface PeerMedians {
@@ -25,6 +26,36 @@ export interface PeerMedians {
 
 export const EMPTY_PEER_MEDIANS: PeerMedians = { n: 0 }
 
+/** When FMP stock-peers returns nothing, still compute medians vs large-cap tech / growth names. */
+const FALLBACK_PEER_UNIVERSE = [
+  'AAPL',
+  'GOOGL',
+  'GOOG',
+  'AMZN',
+  'META',
+  'NVDA',
+  'AVGO',
+  'ORCL',
+  'CSCO',
+  'ADBE',
+  'CRM',
+  'INTC',
+  'IBM',
+  'QCOM',
+  'AMD',
+  'TXN',
+  'NOW',
+  'UBER',
+] as const
+
+function peerSymbolsForRun(subject: string | undefined, fmpPeers: string[], maxPeers: number): string[] {
+  const sub = (subject ?? '').trim().toUpperCase()
+  const primary = fmpPeers.filter((p) => p.trim().toUpperCase() !== sub)
+  if (primary.length > 0) return primary.slice(0, maxPeers)
+  if (!sub) return fmpPeers.slice(0, maxPeers)
+  return FALLBACK_PEER_UNIVERSE.filter((p) => p !== sub).slice(0, maxPeers)
+}
+
 function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
   if (!o) return undefined
   for (const k of keys) {
@@ -34,8 +65,8 @@ function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
   return undefined
 }
 
-function extractPeerRow(km?: JsonRecord) {
-  if (!km) return undefined
+function extractPeerRow(km?: JsonRecord, incTtm?: JsonRecord) {
+  if (!km || fmpPayloadHasErrorMessage(km)) return undefined
   const mktCap = pick(km, ['marketCap'])
   const shOut = pick(km, ['weightedAverageShsOutDil', 'weightedAverageShsOut'])
   let revenue = pick(km, ['revenue', 'totalRevenue'])
@@ -44,6 +75,10 @@ function extractPeerRow(km?: JsonRecord) {
     if (rps !== undefined && shOut !== undefined && shOut > 0) {
       revenue = rps * shOut
     }
+  }
+  if (revenue === undefined && incTtm && !fmpPayloadHasErrorMessage(incTtm)) {
+    const rInc = pick(incTtm, ['revenue', 'sales', 'totalRevenue'])
+    if (rInc !== undefined) revenue = rInc
   }
 
   const totalDebtKm = pick(km, ['totalDebt'])
@@ -61,6 +96,24 @@ function extractPeerRow(km?: JsonRecord) {
     const cogs = pick(km, ['costOfRevenue', 'costOfGoodsSold', 'costOfSales', 'costOfGoodsAndServicesSold'])
     if (cogs !== undefined && revenue > cogs) {
       grossProfitApprox = revenue - cogs
+    }
+  }
+  if (grossProfitApprox === undefined && incTtm && !fmpPayloadHasErrorMessage(incTtm)) {
+    const gpInc = pick(incTtm, ['grossProfit'])
+    if (gpInc !== undefined) {
+      grossProfitApprox = gpInc
+    } else {
+      const revInc = revenue ?? pick(incTtm, ['revenue', 'sales', 'totalRevenue'])
+      const cogsInc = pick(incTtm, [
+        'costOfRevenue',
+        'costOfGoodsSold',
+        'costOfSales',
+        'costOfGoodsAndServicesSold',
+      ])
+      if (revInc !== undefined && cogsInc !== undefined && revInc > cogsInc) {
+        grossProfitApprox = revInc - cogsInc
+        if (revenue === undefined) revenue = revInc
+      }
     }
   }
 
@@ -192,11 +245,11 @@ function extractPeerRow(km?: JsonRecord) {
 export async function fetchPeerMedians(
   peers: string[],
   apiKey: string,
-  options?: { maxPeers?: number; batchSize?: number },
+  options?: { maxPeers?: number; batchSize?: number; subjectSymbol?: string },
 ): Promise<PeerMedians> {
   const maxPeers = options?.maxPeers ?? 14
   const batchSize = options?.batchSize ?? 5
-  const slice = peers.slice(0, maxPeers)
+  const slice = peerSymbolsForRun(options?.subjectSymbol, peers, maxPeers)
 
   const rows: ReturnType<typeof extractPeerRow>[] = []
   for (let i = 0; i < slice.length; i += batchSize) {
@@ -204,12 +257,19 @@ export async function fetchPeerMedians(
     const part = await Promise.all(
       batch.map(async (sym) => {
         try {
-          const raw = await fmpGet<unknown>(
-            `/stable/key-metrics-ttm?symbol=${encodeURIComponent(sym)}`,
-            apiKey,
-          )
-          const rows = asArray<JsonRecord>(raw)
-          return extractPeerRow(firstRow(rows))
+          const [kmRaw, incRaw] = await Promise.all([
+            fmpGet<unknown>(`/stable/key-metrics-ttm?symbol=${encodeURIComponent(sym)}`, apiKey),
+            fmpGet<unknown>(`/stable/income-statement-ttm?symbol=${encodeURIComponent(sym)}`, apiKey).catch(
+              () => null,
+            ),
+          ])
+          if (fmpPayloadHasErrorMessage(kmRaw)) return undefined
+          const kmRows = asArray<JsonRecord>(kmRaw)
+          const km = firstRow(kmRows)
+          const incRows =
+            incRaw === null || fmpPayloadHasErrorMessage(incRaw) ? [] : asArray<JsonRecord>(incRaw)
+          const inc = firstRow(incRows)
+          return extractPeerRow(km, inc)
         } catch {
           return undefined
         }

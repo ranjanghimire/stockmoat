@@ -106,7 +106,7 @@ export default function App() {
       const peerMedians = useYahoo
         ? EMPTY_PEER_MEDIANS
         : shouldFetchFmpPeerMedians()
-          ? await fetchPeerMedians(pack.peers, fmpKey)
+          ? await fetchPeerMedians(pack.peers, fmpKey, { subjectSymbol: sym })
           : EMPTY_PEER_MEDIANS
 
       const routing =

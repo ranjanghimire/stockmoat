@@ -24,7 +24,16 @@ export interface CompanyRawPack {
   peers: string[]
 }
 
+function splitPeerTokens(raw: string): string[] {
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
 function parseStockPeersPayload(data: unknown, subject: string): string[] {
+  if (fmpPayloadHasErrorMessage(data)) return []
+
   const sub = subject.toUpperCase()
   const out: string[] = []
 
@@ -33,16 +42,40 @@ function parseStockPeersPayload(data: unknown, subject: string): string[] {
     if (u && u !== sub && !out.includes(u)) out.push(u)
   }
 
+  if (typeof data === 'string') {
+    for (const part of splitPeerTokens(data)) add(part)
+    return out
+  }
+
   if (Array.isArray(data) && data.every((x) => typeof x === 'string')) {
     for (const s of data as string[]) add(s)
     return out
   }
 
   const rows = asArray<JsonRecord>(data)
+
+  const rowHasPeersField = (r: JsonRecord) =>
+    'peers' in r &&
+    r.peers != null &&
+    (typeof r.peers === 'string'
+      ? String(r.peers).trim() !== ''
+      : Array.isArray(r.peers)
+        ? r.peers.length > 0
+        : true)
+
+  const anyStructuredPeers = rows.some((r) => r && typeof r === 'object' && rowHasPeersField(r))
+
   for (const row of rows) {
-    if (typeof row.peers === 'string') {
-      for (const part of row.peers.split(',')) add(part)
+    if (!row || typeof row !== 'object') continue
+
+    const stringListFields = ['peers', 'peerList', 'stockPeers', 'peerSymbols', 'similarStocks', 'symbolsList']
+    for (const k of stringListFields) {
+      const v = row[k]
+      if (typeof v === 'string') {
+        for (const part of splitPeerTokens(v)) add(part)
+      }
     }
+
     if (Array.isArray(row.peers)) {
       for (const p of row.peers) {
         if (typeof p === 'string') add(p)
@@ -51,6 +84,25 @@ function parseStockPeersPayload(data: unknown, subject: string): string[] {
           if (typeof sym === 'string') add(sym)
         }
       }
+    }
+
+    for (const k of ['peerSymbols', 'stockPeers', 'peerList', 'similarStocks'] as const) {
+      const arr = row[k]
+      if (!Array.isArray(arr)) continue
+      for (const p of arr) {
+        if (typeof p === 'string') add(p)
+        else if (p && typeof p === 'object' && 'symbol' in (p as JsonRecord)) {
+          const sym = (p as JsonRecord).symbol
+          if (typeof sym === 'string') add(sym)
+        }
+      }
+    }
+  }
+
+  if (out.length === 0 && !anyStructuredPeers && rows.length > 1) {
+    for (const row of rows) {
+      const sym = row.symbol
+      if (typeof sym === 'string') add(sym)
     }
   }
 
@@ -124,7 +176,8 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
   const scoreArr = scoreRaw === null ? [] : asArray<JsonRecord>(scoreRaw)
   const score = firstRow(scoreArr)
 
-  const peers = peersRaw === null ? [] : parseStockPeersPayload(peersRaw, sym)
+  const peers =
+    peersRaw === null || fmpPayloadHasErrorMessage(peersRaw) ? [] : parseStockPeersPayload(peersRaw, sym)
 
   const incomeTtmArr = asArray<JsonRecord>(incomeTtmRaw)
   const cfTtmArr = asArray<JsonRecord>(cfTtmRaw)
