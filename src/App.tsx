@@ -21,6 +21,7 @@ import { createLiveMetricEvaluator } from './lib/liveMetricEvaluator'
 import { resolveProfileMetrics } from './lib/resolveProfileMetrics'
 import { MetricTable } from './components/MetricTable'
 import { PillarBars } from './components/PillarBars'
+import { PillarDetailPanel } from './components/PillarDetailPanel'
 import { ScoreHero } from './components/ScoreHero'
 
 function formatProfileId(id: string): string {
@@ -40,7 +41,21 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fromCache, setFromCache] = useState(false)
+  const [selectedPillar, setSelectedPillar] = useState<string | null>(null)
   const analysisCacheRef = useRef(new Map<string, AnalysisCacheEntry>())
+
+  useEffect(() => {
+    setSelectedPillar(null)
+  }, [submitted])
+
+  useEffect(() => {
+    if (!selectedPillar) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedPillar(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedPillar])
 
   const runAnalysis = useCallback(async (opts?: { forceRefresh?: boolean }) => {
     const sym = submitted.trim().toUpperCase() || 'MSFT'
@@ -278,7 +293,12 @@ export default function App() {
               sector={analysis.sector}
               industry={analysis.industry}
             />
-            <PillarBars analysis={analysis} />
+            <PillarBars
+              analysis={analysis}
+              selectedPillar={selectedPillar}
+              onSelectPillar={setSelectedPillar}
+            />
+            <PillarDetailPanel analysis={analysis} pillar={selectedPillar} onClose={() => setSelectedPillar(null)} />
             <MetricTable analysis={analysis} />
           </>
         ) : !loading && !error ? (

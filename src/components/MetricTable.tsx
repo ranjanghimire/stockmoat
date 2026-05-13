@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { MoatAnalysis, MetricRow } from '../lib/computeMoatAnalysis'
+import { PILLAR_LABEL, sortPillarIds } from '../lib/pillarMeta'
 
 interface MetricTableProps {
   analysis: MoatAnalysis
@@ -20,7 +21,7 @@ function ModeBadge({ mode }: { mode: string }) {
 }
 
 function pillarLabel(pillar: string): string {
-  return pillar.replace(/_/g, ' ')
+  return PILLAR_LABEL[pillar] ?? pillar.replace(/_/g, ' ')
 }
 
 export function MetricTable({ analysis }: MetricTableProps) {
@@ -39,7 +40,7 @@ export function MetricTable({ analysis }: MetricTableProps) {
       map.set(row.pillar, list)
     }
 
-    return { pillarOrder: order, byPillar: map }
+    return { pillarOrder: sortPillarIds(order), byPillar: map }
   }, [analysis.metrics])
 
   return (
