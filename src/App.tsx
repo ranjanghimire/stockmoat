@@ -1,4 +1,5 @@
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
+import ChartsPage from './pages/ChartsPage'
 import HomePage from './pages/HomePage'
 import ScreenerPage from './pages/ScreenerPage'
 
@@ -15,6 +16,9 @@ function TopNav() {
         <NavLink to="/screen" className={linkClass}>
           Screener
         </NavLink>
+        <NavLink to="/charts" className={linkClass}>
+          Charts
+        </NavLink>
       </nav>
     </div>
   )
@@ -27,6 +31,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/screen" element={<ScreenerPage />} />
+        <Route path="/charts" element={<ChartsPage />} />
       </Routes>
     </BrowserRouter>
   )

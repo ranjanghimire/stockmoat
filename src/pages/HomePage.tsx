@@ -9,7 +9,7 @@ import {
   writeAnalysisCache,
 } from '../lib/analysisCache'
 import { computeMoatAnalysis, type MoatAnalysis } from '../lib/computeMoatAnalysis'
-import { DEMO_TICKERS, PROFILE_ORDER } from '../lib/demoTickerMap'
+import { DEMO_TICKERS } from '../lib/demoTickerMap'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource'
 import { buildCompanyFacts } from '../lib/fmp/buildCompanyFacts'
 import { fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
@@ -36,12 +36,6 @@ function formatProfileId(id: string): string {
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
-}
-
-function formatAutoMappedProfileLabel(a: MoatAnalysis): string {
-  return a.itVariant
-    ? `${formatProfileId(a.profileId)} · ${a.itVariant.replace('_', ' ')}`
-    : formatProfileId(a.profileId)
 }
 
 function readTickerQuery(): string {
@@ -290,80 +284,6 @@ export default function HomePage() {
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>
         ) : null}
 
-        <section className="grid gap-4 rounded-2xl border border-slate-200/80 bg-white/60 p-4 shadow-sm backdrop-blur md:grid-cols-2">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile mode</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setProfileMode('auto')}
-                className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                  profileMode === 'auto'
-                    ? 'bg-moat-ink text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                Auto (sector map)
-              </button>
-              <button
-                type="button"
-                onClick={() => setProfileMode('manual')}
-                className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                  profileMode === 'manual'
-                    ? 'bg-moat-ink text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                Manual profile
-              </button>
-            </div>
-          </div>
-          <div>
-            {profileMode === 'auto' ? (
-              <>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mapped profile (auto)</p>
-                <div className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 shadow-inner">
-                  {loading ? (
-                    <span className="text-slate-500">Updating sector-mapped profile…</span>
-                  ) : analysis ? (
-                    <>
-                      <span className="font-medium text-moat-ink">{formatAutoMappedProfileLabel(analysis)}</span>
-                      {analysis.sector ? (
-                        <span className="mt-1 block text-xs font-normal text-slate-500">
-                          FMP sector: {analysis.sector}
-                          {analysis.industry ? ` · ${analysis.industry}` : ''}
-                        </span>
-                      ) : null}
-                    </>
-                  ) : error ? (
-                    <span className="text-rose-800/90">Not loaded — fix the issue above and retry.</span>
-                  ) : (
-                    <span className="text-slate-500">Enter a ticker and run Analyze to see the mapped profile.</span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="profile">
-                  Manual sector profile
-                </label>
-                <select
-                  id="profile"
-                  value={manualProfile}
-                  onChange={(e) => setManualProfile(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner outline-none focus:ring-2 focus:ring-moat-accent/30"
-                >
-                  {PROFILE_ORDER.map((id) => (
-                    <option key={id} value={id}>
-                      {formatProfileId(id)}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
-          </div>
-        </section>
-
         <PriceChartsPanel
           ticker={submitted.trim().toUpperCase() || 'MSFT'}
           data={priceCharts}
@@ -387,6 +307,12 @@ export default function HomePage() {
               dataSource={analysis.dataSource}
               sector={analysis.sector}
               industry={analysis.industry}
+              profileMode={profileMode}
+              manualProfile={manualProfile}
+              onScoringProfileChange={({ mode, manualProfile: mp }) => {
+                setProfileMode(mode)
+                setManualProfile(mp)
+              }}
             />
             {analysis.fundamentals ? (
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />
