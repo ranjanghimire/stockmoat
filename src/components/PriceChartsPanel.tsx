@@ -15,6 +15,8 @@ export function PriceChartsPanel({
   loading,
   error,
   contextNote,
+  /** Omit titles and meta; same weekly/daily grid as home (e.g. gallery page). */
+  chartsOnly,
 }: {
   ticker: string
   data: PriceChartsPayload | null
@@ -22,6 +24,7 @@ export function PriceChartsPanel({
   error: string | null
   /** When set (e.g. Screener nightly snapshot), replaces the small-print provider explanation. */
   contextNote?: string
+  chartsOnly?: boolean
 }) {
   const wFirstLast =
     data?.weekly.length && data.weekly.length > 0
@@ -31,6 +34,64 @@ export function PriceChartsPanel({
     data?.daily.length && data.daily.length > 0
       ? { a: data.daily[0]!, b: data.daily[data.daily.length - 1]! }
       : null
+
+  const chartGrid =
+    !loading && !error && data ? (
+      <div className={chartsOnly ? 'grid gap-3 md:grid-cols-2' : 'mt-2 grid gap-3 md:grid-cols-2'}>
+        <div className="rounded-lg border border-slate-200/60 bg-white/50 px-2 py-1.5">
+          <p className="text-[11px] font-semibold text-slate-700">Weekly · ~2y</p>
+          {data.weekly.length > 0 ? (
+            <>
+              <CandlestickChart bars={data.weekly} currency={data.currency} />
+              {wFirstLast ? (
+                <div className="flex justify-between text-[10px] text-slate-500">
+                  <span>{formatAxisDate(wFirstLast.a.t)}</span>
+                  <span>{formatAxisDate(wFirstLast.b.t)}</span>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="py-4 text-center text-xs text-slate-500">No weekly bars</p>
+          )}
+        </div>
+        <div className="rounded-lg border border-slate-200/60 bg-white/50 px-2 py-1.5">
+          <p className="text-[11px] font-semibold text-slate-700">Daily · ~6mo</p>
+          {data.daily.length > 0 ? (
+            <>
+              <CandlestickChart bars={data.daily} currency={data.currency} />
+              {dFirstLast ? (
+                <div className="flex justify-between text-[10px] text-slate-500">
+                  <span>{formatAxisDate(dFirstLast.a.t)}</span>
+                  <span>{formatAxisDate(dFirstLast.b.t)}</span>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="py-4 text-center text-xs text-slate-500">No daily bars</p>
+          )}
+        </div>
+      </div>
+    ) : null
+
+  if (chartsOnly) {
+    return (
+      <section
+        className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-sm backdrop-blur"
+        aria-label={`Stored OHLC for ${ticker}`}
+      >
+        {loading ? (
+          <div className="grid gap-2 md:grid-cols-2">
+            <div className="h-[16rem] animate-pulse rounded-lg bg-slate-100/90" aria-busy="true" />
+            <div className="h-[16rem] animate-pulse rounded-lg bg-slate-100/90" aria-busy="true" />
+          </div>
+        ) : null}
+        {error && !loading ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">{error}</p>
+        ) : null}
+        {chartGrid}
+      </section>
+    )
+  }
 
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-sm backdrop-blur">
@@ -67,42 +128,7 @@ export function PriceChartsPanel({
         <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">{error}</p>
       ) : null}
 
-      {!loading && !error && data ? (
-        <div className="mt-2 grid gap-3 md:grid-cols-2">
-          <div className="rounded-lg border border-slate-200/60 bg-white/50 px-2 py-1.5">
-            <p className="text-[11px] font-semibold text-slate-700">Weekly · ~2y</p>
-            {data.weekly.length > 0 ? (
-              <>
-                <CandlestickChart bars={data.weekly} currency={data.currency} />
-                {wFirstLast ? (
-                  <div className="flex justify-between text-[10px] text-slate-500">
-                    <span>{formatAxisDate(wFirstLast.a.t)}</span>
-                    <span>{formatAxisDate(wFirstLast.b.t)}</span>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <p className="py-4 text-center text-xs text-slate-500">No weekly bars</p>
-            )}
-          </div>
-          <div className="rounded-lg border border-slate-200/60 bg-white/50 px-2 py-1.5">
-            <p className="text-[11px] font-semibold text-slate-700">Daily · ~6mo</p>
-            {data.daily.length > 0 ? (
-              <>
-                <CandlestickChart bars={data.daily} currency={data.currency} />
-                {dFirstLast ? (
-                  <div className="flex justify-between text-[10px] text-slate-500">
-                    <span>{formatAxisDate(dFirstLast.a.t)}</span>
-                    <span>{formatAxisDate(dFirstLast.b.t)}</span>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <p className="py-4 text-center text-xs text-slate-500">No daily bars</p>
-            )}
-          </div>
-        </div>
-      ) : null}
+      {chartGrid}
     </section>
   )
 }
