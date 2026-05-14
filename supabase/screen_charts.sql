@@ -1,0 +1,5 @@
+-- Source of truth for `screen_charts` is the versioned migration:
+--   supabase/migrations/20260514120000_screen_charts.sql
+--
+-- Apply with `npx supabase db push` or run that file in the Supabase SQL editor.
+-- Populated by `npm run screen:charts` after scores exist in `screen_scores`.

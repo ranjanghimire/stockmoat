@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { PriceChartsPayload } from './yahoo/weeklyChartTypes'
 
 export interface ScreenScoreRow {
   symbol: string
@@ -10,6 +11,14 @@ export interface ScreenScoreRow {
   any_gate_fail: boolean
   score_cap: number | null
   raw_weighted: number | null
+  updated_at: string
+}
+
+/** Row from `screen_charts` (nightly FMP payload for Screener). */
+export interface ScreenChartRow {
+  symbol: string
+  payload: PriceChartsPayload | null
+  fetch_error: string | null
   updated_at: string
 }
 

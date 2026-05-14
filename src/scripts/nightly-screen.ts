@@ -2,6 +2,9 @@
  * Batch FMP moat scores into Supabase. Run from project root:
  *   npm run screen:nightly
  *
+ * After scores exist, precompute charts for the Screener:
+ *   npm run screen:charts
+ *
  * Requires in .env / .env.local: fmpApiKey, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Optional: SCREEN_MAX_TICKERS (default 50), SCREEN_TICKER_GAP_MS (default 30000),
  * SCREEN_OFFSET (default 0) — skip this many symbols from the start of the universe for batched runs.
