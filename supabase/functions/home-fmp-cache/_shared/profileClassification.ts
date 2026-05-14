@@ -1,4 +1,4 @@
-import type { JsonRecord } from './normalize'
+import type { JsonRecord } from './normalize.ts'
 
 /** FMP stable + legacy profile payloads use inconsistent keys; try all known variants. */
 const SECTOR_FIELD_KEYS = [

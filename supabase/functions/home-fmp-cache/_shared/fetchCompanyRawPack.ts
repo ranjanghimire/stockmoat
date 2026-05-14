@@ -1,10 +1,10 @@
-import { fmpGet } from './http'
+import { fmpGet } from './http.ts'
 import {
   fmpPayloadHasErrorMessage,
   fmpProfileNeedsLegacyEnrichment,
   mergeFmpProfileRows,
-} from './profileClassification'
-import { asArray, firstRow, type JsonRecord } from './normalize'
+} from './profileClassification.ts'
+import { asArray, firstRow, type JsonRecord } from './normalize.ts'
 
 /** FMP free/starter plans reject `limit` > 5 on statement endpoints (402). */
 const FMP_ANNUAL_STATEMENT_LIMIT = 5

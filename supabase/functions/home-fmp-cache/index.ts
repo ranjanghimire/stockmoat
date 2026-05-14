@@ -1,12 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
-// FMP helpers in ../_shared are copies of src/lib/fmp/* — run `npm run sync:edge-fmp-shared` after changing those modules.
-import { fetchCompanyRawPack } from '../_shared/fetchCompanyRawPack.ts'
-import { fetchPeerMedians, EMPTY_PEER_MEDIANS } from '../_shared/peerMedians.ts'
-import type { CompanyRawPack } from '../_shared/fetchCompanyRawPack.ts'
-import type { PeerMedians } from '../_shared/peerMedians.ts'
-import { fmpGet } from '../_shared/http.ts'
-import { asArray, firstRow, type JsonRecord } from '../_shared/normalize.ts'
-import { fmpPayloadHasErrorMessage } from '../_shared/profileClassification.ts'
+// FMP helpers in ./_shared are copies of src/lib/fmp/* — run `npm run sync:edge-fmp-shared` after changing those modules.
+import { fetchCompanyRawPack } from './_shared/fetchCompanyRawPack.ts'
+import { fetchPeerMedians, EMPTY_PEER_MEDIANS } from './_shared/peerMedians.ts'
+import type { CompanyRawPack } from './_shared/fetchCompanyRawPack.ts'
+import type { PeerMedians } from './_shared/peerMedians.ts'
+import { fmpGet } from './_shared/http.ts'
+import { asArray, firstRow, type JsonRecord } from './_shared/normalize.ts'
+import { fmpPayloadHasErrorMessage } from './_shared/profileClassification.ts'
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',

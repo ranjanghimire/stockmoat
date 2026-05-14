@@ -1,6 +1,6 @@
-import { fmpGet } from './http'
-import { fmpPayloadHasErrorMessage } from './profileClassification'
-import { asArray, firstRow, median, num, normalizeMarginRatio, type JsonRecord } from './normalize'
+import { fmpGet } from './http.ts'
+import { fmpPayloadHasErrorMessage } from './profileClassification.ts'
+import { asArray, firstRow, median, num, normalizeMarginRatio, type JsonRecord } from './normalize.ts'
 
 export interface PeerMedians {
   n: number
