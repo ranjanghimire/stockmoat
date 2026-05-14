@@ -40,6 +40,11 @@ export interface MoatAnalysis {
   dataSource: 'fmp' | 'demo' | 'yahoo_dev'
   /** TTM / BS figures for UI (cash-truth drill-down, etc.). */
   fundamentals?: MoatFundamentalsSnapshot
+  /**
+   * Last quote snapshot for UI only (not scoring). `fetchedAt` is when we persisted it in this session;
+   * treat as stale per `DELAYED_PRICE_SNAPSHOT_TTL_MS` when reading cache.
+   */
+  delayedPrice?: { value: number; currency: string; fetchedAt: number }
 }
 
 export function computeMoatAnalysis(

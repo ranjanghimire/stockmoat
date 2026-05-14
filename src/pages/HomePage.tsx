@@ -10,8 +10,9 @@ import {
 } from '../lib/analysisCache'
 import { computeMoatAnalysis, type MoatAnalysis } from '../lib/computeMoatAnalysis'
 import { DEMO_TICKERS } from '../lib/demoTickerMap'
+import { DELAYED_PRICE_SNAPSHOT_TTL_MS } from '../lib/delayedPricePolicy'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource'
-import { buildCompanyFacts } from '../lib/fmp/buildCompanyFacts'
+import { buildCompanyFacts, listingCurrencyFromPack } from '../lib/fmp/buildCompanyFacts'
 import { fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
@@ -111,10 +112,18 @@ export default function HomePage() {
         ANALYSIS_CACHE_TTL_MS,
       )
       if (cached) {
-        setFromCache(true)
-        setAnalysis(cached)
-        setError(null)
-        return
+        const d = cached.delayedPrice
+        const priceSnapshotFresh =
+          d !== undefined &&
+          Number.isFinite(d.value) &&
+          d.value > 0 &&
+          Date.now() - d.fetchedAt <= DELAYED_PRICE_SNAPSHOT_TTL_MS
+        if (priceSnapshotFresh) {
+          setFromCache(true)
+          setAnalysis(cached)
+          setError(null)
+          return
+        }
       }
     }
 
@@ -167,13 +176,23 @@ export default function HomePage() {
         },
       )
 
+      const now = Date.now()
+      const listingCurrency = listingCurrencyFromPack(pack)
+      const analysisWithPrice: MoatAnalysis = {
+        ...result,
+        delayedPrice:
+          facts.price !== undefined && facts.price > 0
+            ? { value: facts.price, currency: listingCurrency, fetchedAt: now }
+            : undefined,
+      }
+
       writeAnalysisCache(
         analysisCacheRef.current,
         cacheKey,
-        { savedAt: Date.now(), analysis: result },
+        { savedAt: now, analysis: analysisWithPrice },
         ANALYSIS_CACHE_MAX_ENTRIES,
       )
-      setAnalysis(result)
+      setAnalysis(analysisWithPrice)
     } catch (e) {
       setAnalysis(null)
       setError(e instanceof Error ? e.message : 'Something went wrong while loading market data.')
@@ -313,6 +332,7 @@ export default function HomePage() {
                 setProfileMode(mode)
                 setManualProfile(mp)
               }}
+              delayedPrice={analysis.delayedPrice}
             />
             {analysis.fundamentals ? (
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />

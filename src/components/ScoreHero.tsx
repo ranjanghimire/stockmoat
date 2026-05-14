@@ -15,6 +15,7 @@ interface ScoreHeroProps {
   profileMode?: 'auto' | 'manual'
   manualProfile?: string
   onScoringProfileChange?: (next: { mode: 'auto' | 'manual'; manualProfile: string }) => void
+  delayedPrice?: { value: number; currency: string; fetchedAt: number }
 }
 
 function formatProfileId(id: string): string {
@@ -30,6 +31,26 @@ function dataSourceLabel(ds: string | undefined): string {
   return 'demo / offline'
 }
 
+function formatDelayedPriceMoney(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(value)
+  } catch {
+    return `$${value.toFixed(2)}`
+  }
+}
+
+function formatPriceSnapshotTime(fetchedAt: number): string {
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(fetchedAt))
+  } catch {
+    return ''
+  }
+}
+
 export function ScoreHero({
   score,
   ticker,
@@ -43,6 +64,7 @@ export function ScoreHero({
   profileMode = 'auto',
   manualProfile = 'consumer_staples_discretionary_general',
   onScoringProfileChange,
+  delayedPrice,
 }: ScoreHeroProps) {
   const hue = Math.round(120 - (score / 10) * 70)
   const yahooSymbol = ticker.trim().toUpperCase().replace(/\./g, '-')
@@ -91,6 +113,24 @@ export function ScoreHero({
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
             Sector profile: <span className="font-medium text-moat-ink">{profileLabel}</span>. <br />
             Data: <span className="font-medium text-moat-ink">{dataSourceLabel(dataSource)}</span>
+            <br />
+            {delayedPrice ? (
+              <>
+                <span className="font-medium text-moat-ink">Price (delayed):</span>{' '}
+                <span className="tabular-nums font-medium text-moat-ink">
+                  {formatDelayedPriceMoney(delayedPrice.value, delayedPrice.currency)}
+                </span>
+                <span className="text-slate-400">
+                  {' '}
+                  · snapshot {formatPriceSnapshotTime(delayedPrice.fetchedAt)} · we refresh this quote at most every
+                  60 minutes
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-moat-ink">Price (delayed):</span> <span className="text-slate-500">—</span>
+              </>
+            )}
             <br />
             <span className="mt-1 inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span>

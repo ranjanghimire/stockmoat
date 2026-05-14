@@ -3,6 +3,19 @@ import { num, normalizeMarginRatio } from './normalize'
 import type { JsonRecord } from './normalize'
 import type { CompanyRawPack } from './fetchCompanyRawPack'
 
+/** Listing / quote currency for formatting (FMP profile or quote; Yahoo quote after mapping). */
+export function listingCurrencyFromPack(pack: CompanyRawPack): string {
+  const q = pack.quote as JsonRecord | undefined
+  const p = pack.profile as JsonRecord | undefined
+  const fromQuote = q?.currency
+  const fromProfile = p?.currency
+  const cur =
+    (typeof fromQuote === 'string' && fromQuote.trim()) ||
+    (typeof fromProfile === 'string' && fromProfile.trim()) ||
+    ''
+  return cur || 'USD'
+}
+
 export interface CompanyFacts {
   symbol: string
   companyName: string

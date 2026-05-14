@@ -207,6 +207,7 @@ export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown
 
   const quote: JsonRecord = {
     price: lastPrice,
+    currency: String(priceMod?.currency ?? 'USD'),
     pe: num(dks?.trailingPE, priceMod?.trailingPE),
     marketCap: mktCap,
   }
