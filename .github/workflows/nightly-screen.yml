@@ -28,11 +28,12 @@ jobs:
       SCREEN_MAX_TICKERS: '1000'
       SCREEN_OFFSET: '0'
     steps:
-      - uses: actions/checkout@v4
+      # checkout v5+ and setup-node v5+ run on Node 24; v4 actions used Node 20 (deprecated on hosted runners).
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
