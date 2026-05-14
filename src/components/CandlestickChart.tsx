@@ -44,7 +44,16 @@ function formatAxisPrice(n: number, currency = 'USD'): string {
   }
 }
 
-export function CandlestickChart({ bars, currency = 'USD' }: { bars: OhlcvBar[]; currency?: string }) {
+export function CandlestickChart({
+  bars,
+  currency = 'USD',
+  /** Shown at the top-right of the plot area (e.g. ticker on gallery / charts-only views). */
+  plotCornerLabel,
+}: {
+  bars: OhlcvBar[]
+  currency?: string
+  plotCornerLabel?: string
+}) {
   const layout = useMemo(() => layoutBars(bars), [bars])
 
   if (!layout) return null
@@ -68,6 +77,14 @@ export function CandlestickChart({ bars, currency = 'USD' }: { bars: OhlcvBar[];
         ))}
       </div>
       <div className={`relative min-w-0 flex-1 ${CHART_H_CLASS}`}>
+        {plotCornerLabel ? (
+          <span
+            className="pointer-events-none absolute right-0.5 top-0.5 z-10 rounded bg-white/90 px-1 py-0.5 font-mono text-[10px] font-semibold uppercase leading-none text-moat-ink shadow-sm ring-1 ring-slate-200/80"
+            aria-hidden
+          >
+            {plotCornerLabel}
+          </span>
+        ) : null}
         <svg
           className="h-full w-full"
           viewBox="0 0 100 100"
