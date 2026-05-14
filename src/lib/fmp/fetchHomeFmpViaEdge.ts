@@ -25,8 +25,23 @@ function edgeThrottleKey(profileCacheKey: string, fetchPeers: boolean): string {
 }
 
 /**
- * When `VITE_HOME_FMP_CACHE` is true and Supabase is configured, loads FMP company pack + peer medians
- * through the `home-fmp-cache` Edge Function (Postgres staleness). Returns null to fall back to browser FMP.
+ * Whether the app should call the `home-fmp-cache` Edge Function (writes/read Postgres).
+ * Requires both `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (same as browser client).
+ * - `VITE_HOME_FMP_CACHE=false` or `0` → off.
+ * - Otherwise → on (including unset), so Supabase-backed home cache runs once Edge is deployed.
+ */
+export function shouldUseHomeFmpEdgeCache(): boolean {
+  const url = import.meta.env.VITE_SUPABASE_URL?.trim()
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+  if (!url || !anon) return false
+  const v = import.meta.env.VITE_HOME_FMP_CACHE
+  if (v === 'false' || v === '0') return false
+  return true
+}
+
+/**
+ * Loads FMP company pack + peer medians through the `home-fmp-cache` Edge Function (Postgres staleness).
+ * Returns null to fall back to browser FMP (e.g. function not deployed or invoke error).
  */
 export async function fetchHomeFmpBundleViaEdge(options: {
   supabase: SupabaseClient
@@ -35,7 +50,7 @@ export async function fetchHomeFmpBundleViaEdge(options: {
   fetchPeers: boolean
   forceRefresh: boolean
 }): Promise<HomeFmpEdgeBundle | null> {
-  if (import.meta.env.VITE_HOME_FMP_CACHE !== 'true') return null
+  if (!shouldUseHomeFmpEdgeCache()) return null
 
   const { supabase, profileCacheKey, symbol, fetchPeers, forceRefresh } = options
   const tKey = edgeThrottleKey(profileCacheKey, fetchPeers)

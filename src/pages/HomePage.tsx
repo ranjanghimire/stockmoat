@@ -15,7 +15,7 @@ import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource
 import { buildCompanyFacts, listingCurrencyFromPack } from '../lib/fmp/buildCompanyFacts'
 import type { CompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
 import { fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
-import { fetchHomeFmpBundleViaEdge, quoteSnapshotMsFromEdgeMeta, type HomeFmpEdgeMeta } from '../lib/fmp/fetchHomeFmpViaEdge'
+import { fetchHomeFmpBundleViaEdge, quoteSnapshotMsFromEdgeMeta, shouldUseHomeFmpEdgeCache, type HomeFmpEdgeMeta } from '../lib/fmp/fetchHomeFmpViaEdge'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
 import { mapFmpSectorToProfile } from '../lib/fmp/mapSectorToProfile'
@@ -97,8 +97,7 @@ export default function HomePage() {
     const useYahoo = isYahooDevProvider()
     const fmpKey = getFmpApiKey()
     const supabaseClient = getSupabaseBrowserClient()
-    const edgeHomeCache =
-      !useYahoo && import.meta.env.VITE_HOME_FMP_CACHE === 'true' && Boolean(supabaseClient)
+    const edgeHomeCache = !useYahoo && Boolean(supabaseClient) && shouldUseHomeFmpEdgeCache()
 
     if (!useYahoo && !fmpKey && !edgeHomeCache) {
       setError(
