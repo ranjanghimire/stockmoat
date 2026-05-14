@@ -1,5 +1,9 @@
 import type { CompanyFacts } from './fmp/buildCompanyFacts'
 import type { CompanyRawPack } from './fmp/fetchCompanyRawPack'
+import {
+  analystRecommendationFromFmpPack,
+  type AnalystRecommendationSnapshot,
+} from './fmp/parseAnalystStockRecommendations'
 import type { JsonRecord } from './fmp/normalize'
 import { num } from './fmp/normalize'
 
@@ -88,6 +92,8 @@ export interface MoatFundamentalsSnapshot {
   marketCapTierLabel?: MarketCapTierLabel
   /** TTM dividend yield as decimal when available. */
   dividendYield?: number
+  /** Latest row from FMP analyst stock recommendations (buy/hold/sell counts). */
+  analystRecommendations?: AnalystRecommendationSnapshot
   incomeCharts?: IncomeFundamentalsCharts
   balanceCharts?: BalanceFundamentalsCharts
 }
@@ -197,6 +203,8 @@ export function buildMoatFundamentalsSnapshot(f: CompanyFacts, pack?: CompanyRaw
     if (incomeCharts) base.incomeCharts = incomeCharts
     const balanceCharts = buildBalanceChartsFromPack(pack)
     if (balanceCharts) base.balanceCharts = balanceCharts
+    const ar = analystRecommendationFromFmpPack(pack)
+    if (ar) base.analystRecommendations = ar
   }
   return base
 }

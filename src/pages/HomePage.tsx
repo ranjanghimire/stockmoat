@@ -388,7 +388,9 @@ export default function HomePage() {
               sector={analysis.sector}
               industry={analysis.industry}
             />
-            {analysis.fundamentals ? <FundamentalsSummaryCard fundamentals={analysis.fundamentals} /> : null}
+            {analysis.fundamentals ? (
+              <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />
+            ) : null}
             <PillarBars
               analysis={analysis}
               selectedPillar={selectedPillar}

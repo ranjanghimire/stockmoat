@@ -23,8 +23,25 @@ export interface CompanyRawPack {
   balanceSheetAnnual: JsonRecord[]
   balanceSheetQuarterly: JsonRecord[]
   analystEstimates: JsonRecord[]
+  /** FMP `/stable/analyst-stock-recommendations` time series; empty when unavailable or Yahoo-shaped pack. */
+  analystStockRecommendations: JsonRecord[]
+  /** FMP `/stable/grades-consensus` summary row when available (often populated when the recommendations series is empty). */
+  gradesConsensus?: JsonRecord
   score: JsonRecord | undefined
   peers: string[]
+}
+
+/** Stable payloads are usually arrays; some endpoints nest rows under `historical` / `data`. */
+function fmpRowsFromPayload(raw: unknown): JsonRecord[] {
+  if (raw === null || raw === undefined) return []
+  if (fmpPayloadHasErrorMessage(raw)) return []
+  if (Array.isArray(raw)) return raw as JsonRecord[]
+  if (typeof raw === 'object') {
+    const o = raw as JsonRecord
+    const nested = o.historical ?? o.data ?? o.recommendations ?? o.rows
+    if (Array.isArray(nested)) return nested as JsonRecord[]
+  }
+  return asArray<JsonRecord>(raw)
 }
 
 function splitPeerTokens(raw: string): string[] {
@@ -131,6 +148,8 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     bsRaw,
     bsQuarterlyRaw,
     analystRaw,
+    analystStockRecRaw,
+    gradesConsensusRaw,
   ] = await Promise.all([
     fmpGet<unknown>(`/stable/profile?symbol=${q}`, apiKey),
     fmpGet<unknown>(`/stable/quote?symbol=${q}`, apiKey),
@@ -164,6 +183,8 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
       `/stable/analyst-estimates?symbol=${q}&period=annual&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
       apiKey,
     ).catch(() => null),
+    fmpGet<unknown>(`/stable/analyst-stock-recommendations?symbol=${q}`, apiKey).catch(() => null),
+    fmpGet<unknown>(`/stable/grades-consensus?symbol=${q}`, apiKey).catch(() => null),
   ])
 
   const profileStableArr = fmpPayloadHasErrorMessage(profileRaw) ? [] : asArray<JsonRecord>(profileRaw)
@@ -204,6 +225,19 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
       ? []
       : asArray<JsonRecord>(bsQuarterlyRaw)
   const analystArr = analystRaw === null ? [] : asArray<JsonRecord>(analystRaw)
+  const analystStockRecommendationsArr =
+    analystStockRecRaw === null || fmpPayloadHasErrorMessage(analystStockRecRaw)
+      ? []
+      : fmpRowsFromPayload(analystStockRecRaw)
+
+  let gradesConsensus: JsonRecord | undefined
+  if (gradesConsensusRaw !== null && !fmpPayloadHasErrorMessage(gradesConsensusRaw)) {
+    const rows = fmpRowsFromPayload(gradesConsensusRaw)
+    gradesConsensus = firstRow(rows) ?? (typeof gradesConsensusRaw === 'object' && !Array.isArray(gradesConsensusRaw)
+      ? (gradesConsensusRaw as JsonRecord)
+      : undefined)
+    if (gradesConsensus && fmpPayloadHasErrorMessage(gradesConsensus)) gradesConsensus = undefined
+  }
 
   return {
     profile,
@@ -218,6 +252,8 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     balanceSheetAnnual: bsArr,
     balanceSheetQuarterly: bsQuarterlyArr,
     analystEstimates: analystArr,
+    analystStockRecommendations: analystStockRecommendationsArr,
+    ...(gradesConsensus !== undefined ? { gradesConsensus } : {}),
     score,
     peers,
   }
