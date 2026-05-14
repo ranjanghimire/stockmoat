@@ -42,7 +42,11 @@ export function PriceChartsPanel({
           <p className="text-[11px] font-semibold text-slate-700">Weekly · ~2y</p>
           {data.weekly.length > 0 ? (
             <>
-              <CandlestickChart bars={data.weekly} currency={data.currency} />
+              <CandlestickChart
+                bars={data.weekly}
+                currency={data.currency}
+                plotCornerLabel={chartsOnly ? ticker : undefined}
+              />
               {wFirstLast ? (
                 <div className="flex justify-between text-[10px] text-slate-500">
                   <span>{formatAxisDate(wFirstLast.a.t)}</span>
@@ -58,7 +62,11 @@ export function PriceChartsPanel({
           <p className="text-[11px] font-semibold text-slate-700">Daily · ~6mo</p>
           {data.daily.length > 0 ? (
             <>
-              <CandlestickChart bars={data.daily} currency={data.currency} />
+              <CandlestickChart
+                bars={data.daily}
+                currency={data.currency}
+                plotCornerLabel={chartsOnly ? ticker : undefined}
+              />
               {dFirstLast ? (
                 <div className="flex justify-between text-[10px] text-slate-500">
                   <span>{formatAxisDate(dFirstLast.a.t)}</span>

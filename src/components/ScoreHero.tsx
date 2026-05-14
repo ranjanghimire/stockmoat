@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { PROFILE_ORDER } from '../lib/demoTickerMap'
 
 interface ScoreHeroProps {
@@ -150,81 +151,86 @@ export function ScoreHero({
         </div>
       </div>
 
-      {profileModalOpen && onScoringProfileChange ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
-          role="presentation"
-          onClick={() => setProfileModalOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-edit-title"
-            className="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="profile-edit-title" className="font-display text-lg text-moat-ink">
-              Scoring profile
-            </h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Auto maps the moat template from the company&apos;s sector. Manual picks a specific sector profile
-              regardless of sector.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setDraftMode('auto')}
-                className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${
-                  draftMode === 'auto' ? 'bg-moat-ink text-white' : 'border border-slate-200 bg-slate-50 text-slate-700'
-                }`}
+      {profileModalOpen && onScoringProfileChange
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-900/40 p-4 py-8 backdrop-blur-sm"
+              role="presentation"
+              onClick={() => setProfileModalOpen(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="profile-edit-title"
+                className="my-auto w-full max-h-[min(90dvh,36rem)] max-w-md overflow-y-auto rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
               >
-                Auto
-              </button>
-              <button
-                type="button"
-                onClick={() => setDraftMode('manual')}
-                className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${
-                  draftMode === 'manual' ? 'bg-moat-ink text-white' : 'border border-slate-200 bg-slate-50 text-slate-700'
-                }`}
-              >
-                Manual
-              </button>
-            </div>
-            {draftMode === 'manual' ? (
-              <label className="mt-4 block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile</span>
-                <select
-                  value={draftManual}
-                  onChange={(e) => setDraftManual(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner outline-none focus:ring-2 focus:ring-moat-accent/30"
-                >
-                  {PROFILE_ORDER.map((id) => (
-                    <option key={id} value={id}>
-                      {formatProfileId(id)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setProfileModalOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={applyProfile}
-                className="rounded-xl bg-moat-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-moat-accent-dim"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <h3 id="profile-edit-title" className="font-display text-lg text-moat-ink">
+                  Scoring profile
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Auto maps the moat template from the company&apos;s sector. Manual picks a specific sector profile
+                  regardless of sector.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDraftMode('auto')}
+                    className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${
+                      draftMode === 'auto' ? 'bg-moat-ink text-white' : 'border border-slate-200 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftMode('manual')}
+                    className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${
+                      draftMode === 'manual'
+                        ? 'bg-moat-ink text-white'
+                        : 'border border-slate-200 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    Manual
+                  </button>
+                </div>
+                {draftMode === 'manual' ? (
+                  <label className="mt-4 block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile</span>
+                    <select
+                      value={draftManual}
+                      onChange={(e) => setDraftManual(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner outline-none focus:ring-2 focus:ring-moat-accent/30"
+                    >
+                      {PROFILE_ORDER.map((id) => (
+                        <option key={id} value={id}>
+                          {formatProfileId(id)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProfileModalOpen(false)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyProfile}
+                    className="rounded-xl bg-moat-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-moat-accent-dim"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
