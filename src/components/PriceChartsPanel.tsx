@@ -14,11 +14,14 @@ export function PriceChartsPanel({
   data,
   loading,
   error,
+  contextNote,
 }: {
   ticker: string
   data: PriceChartsPayload | null
   loading: boolean
   error: string | null
+  /** When set (e.g. Screener nightly snapshot), replaces the small-print provider explanation. */
+  contextNote?: string
 }) {
   const wFirstLast =
     data?.weekly.length && data.weekly.length > 0
@@ -44,11 +47,13 @@ export function PriceChartsPanel({
         </p>
       </div>
       <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-        {!data
-          ? 'Weekly ~2y and daily ~6mo (OHLC). FMP when configured; Yahoo if FMP fails.'
-          : data.chartProvider === 'yahoo'
-            ? 'Yahoo-native intervals; shown when FMP history could not be loaded.'
-            : 'Dividend-adjusted daily EOD from FMP; weekly = ISO week rollup.'}
+        {contextNote
+          ? contextNote
+          : !data
+            ? 'Weekly ~2y and daily ~6mo (OHLC). FMP when configured; Yahoo if FMP fails.'
+            : data.chartProvider === 'yahoo'
+              ? 'Yahoo-native intervals; shown when FMP history could not be loaded.'
+              : 'Dividend-adjusted daily EOD from FMP; weekly = ISO week rollup.'}
       </p>
 
       {loading ? (

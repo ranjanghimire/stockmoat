@@ -1,8 +1,10 @@
-# Nightly batch: scores a universe via FMP and upserts into Supabase.
+# Nightly batch: scores a universe via FMP, upserts `screen_scores`, then precomputes
+# FMP OHLC into `screen_charts` for the Screener “Chart” popup.
 #
 # Secrets (repo → Settings → Secrets and variables → Actions):
 #   FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 # Optional env overrides in the workflow job below: SCREEN_MAX_TICKERS, SCREEN_TICKER_GAP_MS, SCREEN_OFFSET
+# Apply migrations so `screen_charts` exists: `npx supabase db push` (see supabase/migrations/).
 #
 # GitHub `schedule` events are not guaranteed to an exact minute; typical minimum cadence
 # for frequent crons is ~5 minutes. This workflow runs once per day (UTC).
@@ -28,11 +30,12 @@ jobs:
       SCREEN_MAX_TICKERS: '1000'
       SCREEN_OFFSET: '0'
     steps:
-      - uses: actions/checkout@v4
+      # checkout v5+ and setup-node v5+ run on Node 24; v4 actions used Node 20 (deprecated on hosted runners).
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -40,3 +43,6 @@ jobs:
 
       - name: Run nightly screener
         run: npm run screen:nightly
+
+      - name: Precompute screener charts
+        run: npm run screen:charts

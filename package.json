@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "screen:nightly": "vite-node src/scripts/nightly-screen.ts",
+    "screen:charts": "vite-node src/scripts/nightly-screen-charts.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
