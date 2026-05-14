@@ -13,7 +13,9 @@ import { DEMO_TICKERS } from '../lib/demoTickerMap'
 import { DELAYED_PRICE_SNAPSHOT_TTL_MS } from '../lib/delayedPricePolicy'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource'
 import { buildCompanyFacts, listingCurrencyFromPack } from '../lib/fmp/buildCompanyFacts'
+import type { CompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
 import { fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
+import { fetchHomeFmpBundleViaEdge, quoteSnapshotMsFromEdgeMeta, type HomeFmpEdgeMeta } from '../lib/fmp/fetchHomeFmpViaEdge'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
 import { mapFmpSectorToProfile } from '../lib/fmp/mapSectorToProfile'
@@ -31,6 +33,7 @@ import { PillarBars } from '../components/PillarBars'
 import { PillarDetailPanel } from '../components/PillarDetailPanel'
 import { ScoreHero } from '../components/ScoreHero'
 import { PriceChartsPanel } from '../components/PriceChartsPanel'
+import { getSupabaseBrowserClient } from '../lib/supabaseClient'
 
 function formatProfileId(id: string): string {
   return id
@@ -93,8 +96,11 @@ export default function HomePage() {
     const sym = submitted.trim().toUpperCase() || 'MSFT'
     const useYahoo = isYahooDevProvider()
     const fmpKey = getFmpApiKey()
+    const supabaseClient = getSupabaseBrowserClient()
+    const edgeHomeCache =
+      !useYahoo && import.meta.env.VITE_HOME_FMP_CACHE === 'true' && Boolean(supabaseClient)
 
-    if (!useYahoo && !fmpKey) {
+    if (!useYahoo && !fmpKey && !edgeHomeCache) {
       setError(
         'Missing FMP API key. Add fmpApiKey=YOUR_KEY to .env.local and restart Vite (default dev path). Optional: set VITE_USE_YAHOO=true to try Yahoo via the yahoo-finance2 package (not Python yfinance) — Yahoo often rate-limits and may fail.',
       )
@@ -131,16 +137,42 @@ export default function HomePage() {
     setLoading(true)
     setError(null)
     try {
-      const pack = useYahoo
-        ? await fetchYahooCompanyPackDev(sym, { refresh: opts?.forceRefresh === true })
-        : await fetchCompanyRawPack(sym, fmpKey)
+      let pack: CompanyRawPack
+      let peerMedians = EMPTY_PEER_MEDIANS
+      let edgeQuoteMeta: HomeFmpEdgeMeta | null = null
 
-      const facts = buildCompanyFacts(sym, pack)
-      const peerMedians = useYahoo
-        ? EMPTY_PEER_MEDIANS
-        : shouldFetchFmpPeerMedians()
+      if (useYahoo) {
+        pack = await fetchYahooCompanyPackDev(sym, { refresh: opts?.forceRefresh === true })
+      } else if (edgeHomeCache && supabaseClient) {
+        const bundle = await fetchHomeFmpBundleViaEdge({
+          supabase: supabaseClient,
+          profileCacheKey: cacheKey,
+          symbol: sym,
+          fetchPeers: shouldFetchFmpPeerMedians(),
+          forceRefresh: opts?.forceRefresh === true,
+        })
+        if (bundle) {
+          pack = bundle.pack
+          peerMedians = bundle.peer_medians
+          edgeQuoteMeta = bundle.meta
+        } else if (fmpKey) {
+          pack = await fetchCompanyRawPack(sym, fmpKey)
+          peerMedians = shouldFetchFmpPeerMedians()
+            ? await fetchPeerMedians(pack.peers, fmpKey, { subjectSymbol: sym })
+            : EMPTY_PEER_MEDIANS
+        } else {
+          throw new Error(
+            'home-fmp-cache Edge Function failed or is not deployed, and no FMP_API_KEY is set locally. Deploy the function and set FMP_API_KEY + migrations, or add fmpApiKey to .env.local.',
+          )
+        }
+      } else {
+        pack = await fetchCompanyRawPack(sym, fmpKey)
+        peerMedians = shouldFetchFmpPeerMedians()
           ? await fetchPeerMedians(pack.peers, fmpKey, { subjectSymbol: sym })
           : EMPTY_PEER_MEDIANS
+      }
+
+      const facts = buildCompanyFacts(sym, pack)
 
       const routing =
         profileMode === 'auto'
@@ -176,20 +208,21 @@ export default function HomePage() {
         },
       )
 
-      const now = Date.now()
+      const savedAt = Date.now()
+      const priceSnapshotMs = quoteSnapshotMsFromEdgeMeta(edgeQuoteMeta) ?? savedAt
       const listingCurrency = listingCurrencyFromPack(pack)
       const analysisWithPrice: MoatAnalysis = {
         ...result,
         delayedPrice:
           facts.price !== undefined && facts.price > 0
-            ? { value: facts.price, currency: listingCurrency, fetchedAt: now }
+            ? { value: facts.price, currency: listingCurrency, fetchedAt: priceSnapshotMs }
             : undefined,
       }
 
       writeAnalysisCache(
         analysisCacheRef.current,
         cacheKey,
-        { savedAt: now, analysis: analysisWithPrice },
+        { savedAt, analysis: analysisWithPrice },
         ANALYSIS_CACHE_MAX_ENTRIES,
       )
       setAnalysis(analysisWithPrice)
