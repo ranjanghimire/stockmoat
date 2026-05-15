@@ -43,16 +43,20 @@ function MoatSkeleton() {
 function MoatEditorialSubsections({ displayName, ticker }: { displayName: string; ticker: string }) {
   const [moatBody, setMoatBody] = useState<string | null>(null)
   const [howTheyMakeMoneyBody, setHowTheyMakeMoneyBody] = useState<string | null>(null)
+  const [recentDealsBody, setRecentDealsBody] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    void fetchCompanyEditorialSummaries(ticker).then(({ moatBody: m, howTheyMakeMoneyBody: h }) => {
-      if (cancelled) return
-      setMoatBody(m)
-      setHowTheyMakeMoneyBody(h)
-      setReady(true)
-    })
+    void fetchCompanyEditorialSummaries(ticker).then(
+      ({ moatBody: m, howTheyMakeMoneyBody: h, recentDealsBody: d }) => {
+        if (cancelled) return
+        setMoatBody(m)
+        setHowTheyMakeMoneyBody(h)
+        setRecentDealsBody(d)
+        setReady(true)
+      },
+    )
     return () => {
       cancelled = true
     }
@@ -60,10 +64,10 @@ function MoatEditorialSubsections({ displayName, ticker }: { displayName: string
 
   if (!ready) return null
 
-  if (!moatBody && !howTheyMakeMoneyBody) {
+  if (!moatBody && !howTheyMakeMoneyBody && !recentDealsBody) {
     return (
       <p className="text-sm leading-relaxed text-slate-500">
-        No curated moat or revenue notes for this symbol yet.
+        No moat snapshot notes for this symbol yet.
       </p>
     )
   }
@@ -84,6 +88,12 @@ function MoatEditorialSubsections({ displayName, ticker }: { displayName: string
             How {co} makes money?
           </SubsectionLabel>
           <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{howTheyMakeMoneyBody}</p>
+        </div>
+      ) : null}
+      {recentDealsBody ? (
+        <div>
+          <SubsectionLabel sentenceCase>Recent deals and partnerships</SubsectionLabel>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{recentDealsBody}</p>
         </div>
       ) : null}
     </div>

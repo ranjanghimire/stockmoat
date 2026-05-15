@@ -3,6 +3,7 @@ import { getSupabaseBrowserClient } from './supabaseClient'
 export interface CompanyEditorialSummaries {
   moatBody: string | null
   howTheyMakeMoneyBody: string | null
+  recentDealsBody: string | null
 }
 
 function trimOrNull(v: unknown): string | null {
@@ -11,10 +12,14 @@ function trimOrNull(v: unknown): string | null {
   return t.length > 0 ? t : null
 }
 
-const empty: CompanyEditorialSummaries = { moatBody: null, howTheyMakeMoneyBody: null }
+const empty: CompanyEditorialSummaries = {
+  moatBody: null,
+  howTheyMakeMoneyBody: null,
+  recentDealsBody: null,
+}
 
 /**
- * Loads curated moat + “how they make money” copy from `company_moat_summaries`.
+ * Loads moat, revenue, and recent-deals copy from `company_moat_summaries`.
  * Returns null bodies when Supabase is not configured, on error, or when no row / empty fields.
  */
 export async function fetchCompanyEditorialSummaries(symbol: string): Promise<CompanyEditorialSummaries> {
@@ -25,7 +30,7 @@ export async function fetchCompanyEditorialSummaries(symbol: string): Promise<Co
 
   const { data, error } = await sb
     .from('company_moat_summaries')
-    .select('body, how_they_make_money_body')
+    .select('body, how_they_make_money_body, recent_deals_body')
     .eq('symbol', sym)
     .maybeSingle()
 
@@ -34,5 +39,6 @@ export async function fetchCompanyEditorialSummaries(symbol: string): Promise<Co
   return {
     moatBody: trimOrNull(data.body),
     howTheyMakeMoneyBody: trimOrNull(data.how_they_make_money_body),
+    recentDealsBody: trimOrNull(data.recent_deals_body),
   }
 }

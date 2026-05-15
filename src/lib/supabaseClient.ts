@@ -28,6 +28,7 @@ export interface CompanyMoatSummaryRow {
   symbol: string
   body: string
   how_they_make_money_body?: string | null
+  recent_deals_body?: string | null
   /** `curated` = human; `auto_generated` = model/nightly job — query for review with `= 'auto_generated'`. */
   content_source: MoatContentSource
   updated_at: string
