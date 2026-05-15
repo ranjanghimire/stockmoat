@@ -95,9 +95,29 @@ function moatHonest(
 const DEAL_MATERIAL =
   /\b(acqui|merger|definitive agreement|strategic partnership|collaborat(e|ion) with|joint development|co-development|52-week|supply agreement with|alliance with)\b/i
 
+/**
+ * FMP profiles often describe commercial momentum (GPU/compute + customers/agreements)
+ * without using “strategic partnership” phrasing — still worth surfacing for recent deals.
+ */
+function implicitDealMention(sentence: string): boolean {
+  if (DEAL_MATERIAL.test(sentence)) return true
+  const infra = /\b(gpu|gpus|ai[- ]?compute|high[- ]density|data[- ]center|datacenter|neocloud|bitcoin|mining|exahash|megawatt|mwh)\b/i.test(
+    sentence,
+  )
+  const counterparty = /\b(multi[- ]year|agreement|agreements|customer|customers|partner|partners|contract|contracts|collaboration)\b/i.test(
+    sentence,
+  )
+  return infra && counterparty
+}
+
 /** Narrow university / institutional IP license — not a commercial strategic deal. */
-function isNarrowIpLicenseSentence(sentence: string): boolean {
-  return descriptionHasUniversityLicense(sentence) && !DEAL_MATERIAL.test(sentence)
+function isNarrowIpOnlyLicense(s: string): boolean {
+  return (
+    /\blicense\b/i.test(s) &&
+    descriptionHasUniversityLicense(s) &&
+    !DEAL_MATERIAL.test(s) &&
+    !implicitDealMention(s)
+  )
 }
 
 function recentDealsHonest(co: string, description: string): string {
@@ -106,12 +126,12 @@ function recentDealsHonest(co: string, description: string): string {
     .map((x) => x.trim())
     .filter((x) => x.length > 30)
 
-  const licenseOnly = sentences.filter((s) => DEAL_MATERIAL.test(s) || /\blicense\b/i.test(s))
-  if (licenseOnly.length > 0 && licenseOnly.every(isNarrowIpLicenseSentence)) {
+  const dealOrLicense = sentences.filter((s) => implicitDealMention(s) || /\blicense\b/i.test(s))
+  if (dealOrLicense.length > 0 && dealOrLicense.every(isNarrowIpOnlyLicense)) {
     return `${co} has not publicly announced material commercial partnerships; filings describe narrower intellectual‑property or university license arrangements that are not the same as large co‑development or revenue‑sharing deals with strategic customers.`
   }
 
-  const material = sentences.find((s) => DEAL_MATERIAL.test(s))
+  const material = sentences.find((s) => implicitDealMention(s))
   if (material) {
     const line = material.endsWith('.') ? material : `${material}.`
     return `${co}'s public disclosures mention strategic or transactional activity, including ${line.charAt(0).toLowerCase()}${line.slice(1)}`
