@@ -26,6 +26,7 @@ import type { PriceChartsPayload } from '../lib/yahoo/weeklyChartTypes'
 import { loadSectorProfiles } from '../lib/loadSectorProfiles'
 import { createLiveMetricEvaluator } from '../lib/liveMetricEvaluator'
 import { resolveProfileMetrics } from '../lib/resolveProfileMetrics'
+import { MoatAnalysisSection } from '../components/MoatAnalysisSection'
 import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
 import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
 import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
@@ -334,6 +335,13 @@ export default function HomePage() {
         {error ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>
         ) : null}
+
+        <MoatAnalysisSection
+          ticker={submitted.trim().toUpperCase() || 'MSFT'}
+          loading={loading}
+          analysis={analysis}
+          error={error}
+        />
 
         <PriceChartsPanel
           ticker={submitted.trim().toUpperCase() || 'MSFT'}
