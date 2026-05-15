@@ -1,35 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { MoatAnalysis } from '../lib/computeMoatAnalysis'
-import {
-  companyNameWithTicker,
-  deriveMoatKeyTakeaway,
-  type KeyTakeawayLine,
-  type TakeawayTone,
-} from '../lib/deriveMoatKeyTakeaway'
+import { companyNameWithTicker } from '../lib/deriveMoatKeyTakeaway'
 import { fetchCompanyEditorialSummaries } from '../lib/fetchCompanyEditorialSummaries'
-
-function toneClass(tone: TakeawayTone): string {
-  switch (tone) {
-    case 'positive':
-      return 'text-emerald-900'
-    case 'negative':
-      return 'text-rose-900'
-    case 'caution':
-      return 'text-amber-950'
-    default:
-      return 'text-slate-800'
-  }
-}
-
-function TakeawayBlock({ line, prominent }: { line: KeyTakeawayLine; prominent?: boolean }) {
-  return (
-    <p
-      className={`${toneClass(line.tone)} ${prominent ? 'text-base font-medium leading-snug md:text-lg' : 'text-sm leading-snug text-slate-700'}`}
-    >
-      {line.text}
-    </p>
-  )
-}
 
 function SubsectionLabel({ children, sentenceCase }: { children: ReactNode; sentenceCase?: boolean }) {
   return (
@@ -59,11 +31,10 @@ function CompanyHeaderLabel({ displayName, ticker }: { displayName: string; tick
 function MoatSkeleton() {
   return (
     <div className="animate-pulse space-y-4" aria-hidden>
-      <div className="h-4 w-40 rounded bg-slate-200/90" />
+      <div className="h-4 w-48 rounded bg-slate-200/90" />
       <div className="space-y-2 pt-1">
         <div className="h-4 w-full max-w-3xl rounded bg-slate-100" />
         <div className="h-4 w-full max-w-2xl rounded bg-slate-100" />
-        <div className="h-4 w-full max-w-xl rounded bg-slate-100" />
       </div>
     </div>
   )
@@ -88,7 +59,14 @@ function MoatEditorialSubsections({ displayName, ticker }: { displayName: string
   }, [ticker])
 
   if (!ready) return null
-  if (!moatBody && !howTheyMakeMoneyBody) return null
+
+  if (!moatBody && !howTheyMakeMoneyBody) {
+    return (
+      <p className="text-sm leading-relaxed text-slate-500">
+        No curated moat or revenue notes for this symbol yet.
+      </p>
+    )
+  }
 
   const co = companyNameWithTicker(displayName, ticker)
 
@@ -123,8 +101,6 @@ export function MoatAnalysisSection({
   analysis: MoatAnalysis | null
   error: string | null
 }) {
-  const takeaway = useMemo(() => (analysis ? deriveMoatKeyTakeaway(analysis) : null), [analysis])
-
   const body = (() => {
     if (loading) {
       return <MoatSkeleton />
@@ -137,10 +113,10 @@ export function MoatAnalysisSection({
         </p>
       )
     }
-    if (!analysis || !takeaway?.primary) {
+    if (!analysis) {
       return (
         <p className="text-sm leading-snug text-slate-600">
-          Enter a ticker and choose <span className="font-medium">Analyze</span> to load the key takeaway for{' '}
+          Enter a ticker and choose <span className="font-medium">Analyze</span> to load moat notes for{' '}
           <span className="font-mono font-semibold">{ticker}</span>.
         </p>
       )
@@ -148,18 +124,7 @@ export function MoatAnalysisSection({
 
     const sym = analysis.ticker.trim().toUpperCase()
 
-    return (
-      <div className="space-y-8">
-        <div>
-          <SubsectionLabel>Key takeaway</SubsectionLabel>
-          <div className="mt-2 space-y-3">
-            <TakeawayBlock line={takeaway.primary} prominent />
-            {takeaway.secondary ? <TakeawayBlock line={takeaway.secondary} /> : null}
-          </div>
-        </div>
-        <MoatEditorialSubsections key={sym} displayName={analysis.displayName} ticker={analysis.ticker} />
-      </div>
-    )
+    return <MoatEditorialSubsections key={sym} displayName={analysis.displayName} ticker={analysis.ticker} />
   })()
 
   return (

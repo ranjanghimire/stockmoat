@@ -26,6 +26,7 @@ import type { PriceChartsPayload } from '../lib/yahoo/weeklyChartTypes'
 import { loadSectorProfiles } from '../lib/loadSectorProfiles'
 import { createLiveMetricEvaluator } from '../lib/liveMetricEvaluator'
 import { resolveProfileMetrics } from '../lib/resolveProfileMetrics'
+import { KeyTakeawaySection } from '../components/KeyTakeawaySection'
 import { MoatAnalysisSection } from '../components/MoatAnalysisSection'
 import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
 import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
@@ -377,6 +378,7 @@ export default function HomePage() {
             {analysis.fundamentals ? (
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />
             ) : null}
+            <KeyTakeawaySection loading={loading} analysis={analysis} />
             <PillarBars
               analysis={analysis}
               selectedPillar={selectedPillar}
