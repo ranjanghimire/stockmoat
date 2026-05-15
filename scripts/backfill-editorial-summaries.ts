@@ -1,23 +1,28 @@
 /**
- * Backfill company_moat_summaries for symbols in screen_scores ∪ ticker_fmp_home_cache.
- * Fills missing: body, how_they_make_money_body, recent_deals_body.
- * Does not overwrite curated body/how when content_source = 'curated'.
+ * Backfill company_moat_summaries for symbols in screen_scores ∪ ticker_fmp_home_cache,
+ * plus any existing company_moat_summaries row that is not curated.
+ *
+ * Non-curated (auto_generated): fills any empty of body / how_they_make_money / recent_deals.
+ *   Set EDITORIAL_BACKFILL_REFRESH_ALL=1 to regenerate all three for every auto row (heavy).
+ * Curated: never touches body/how; only sets recent_deals_body if currently empty.
  *
  *   npm run backfill:editorial
  *
  * Env: fmpApiKey, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * Optional: BACKFILL_GAP_MS (default 400), BACKFILL_LIMIT (process first N only)
+ * Optional: BACKFILL_GAP_MS (default 400), BACKFILL_LIMIT (first N only),
+ *   EDITORIAL_BACKFILL_REFRESH_ALL=1 (full refresh all auto rows)
  */
 import { config as loadDotenv } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import type { GeneratedEditorial } from '../src/lib/editorial/generateEditorialFromProfile'
 import { generateEditorialFromProfile } from '../src/lib/editorial/generateEditorialFromProfile'
+import { pilotEditorialForSymbol } from '../src/lib/editorial/pilotEditorialTexts'
 import { RECENT_DEALS_OVERRIDES } from '../src/lib/editorial/recentDealsOverrides'
 import { editorialInputFromRawPack } from '../src/lib/editorial/profileFromRawPack'
+import type { CompanyRawPack } from '../src/lib/fmp/fetchCompanyRawPack'
 import { fmpGet } from '../src/lib/fmp/http'
 import { asArray, type JsonRecord } from '../src/lib/fmp/normalize'
 import { fmpPayloadHasErrorMessage } from '../src/lib/fmp/profileClassification'
-import { moatCopyMissing } from '../src/lib/nightly/nightlyPriority'
-import type { CompanyRawPack } from '../src/lib/fmp/fetchCompanyRawPack'
 
 loadDotenv({ path: '.env.local' })
 loadDotenv()
@@ -31,7 +36,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-async function fetchAllSymbols(sb: ReturnType<typeof createClient>): Promise<string[]> {
+async function fetchAllSymbolsFromScoresAndCache(sb: ReturnType<typeof createClient>): Promise<string[]> {
   const out = new Set<string>()
   for (const table of ['screen_scores', 'ticker_fmp_home_cache'] as const) {
     let from = 0
@@ -112,14 +117,37 @@ async function fetchProfileOnly(sym: string, apiKey: string): Promise<CompanyRaw
   }
 }
 
-function needsWork(sym: string, row: MoatRow | undefined): boolean {
+function buildWorkSet(scoresCache: string[], moatMap: Map<string, MoatRow>): string[] {
+  const set = new Set<string>()
+  for (const s of scoresCache) set.add(s)
+  for (const [sym, row] of moatMap) {
+    if (row.content_source !== 'curated') set.add(sym)
+  }
+  return [...set].sort()
+}
+
+function autoRowNeedsWork(row: MoatRow, refreshAllAuto: boolean): boolean {
+  if (refreshAllAuto) return true
+  return (
+    !row.body?.trim() ||
+    !row.how_they_make_money_body?.trim() ||
+    !row.recent_deals_body?.trim()
+  )
+}
+
+function shouldProcessSymbol(
+  row: MoatRow | undefined,
+  refreshAllAuto: boolean,
+): boolean {
   if (!row) return true
-  const curated = row.content_source === 'curated'
-  const missingMoat = moatCopyMissing(row.body, row.how_they_make_money_body)
-  const missingDeals = !row.recent_deals_body?.trim()
-  if (!row) return true
-  if (curated) return missingDeals
-  return missingMoat || missingDeals
+  if (row.content_source === 'curated') return !row.recent_deals_body?.trim()
+  return autoRowNeedsWork(row, refreshAllAuto)
+}
+
+function mergeGenerated(input: GeneratedEditorial, sym: string): GeneratedEditorial {
+  const deals = RECENT_DEALS_OVERRIDES[sym]
+  if (deals) return { ...input, recentDealsBody: deals }
+  return input
 }
 
 async function main(): Promise<void> {
@@ -133,17 +161,20 @@ async function main(): Promise<void> {
 
   const gapMs = Math.max(0, Number.parseInt(env('BACKFILL_GAP_MS', '400'), 10) || 400)
   const limit = Number.parseInt(env('BACKFILL_LIMIT', '0'), 10) || 0
+  const refreshAllAuto =
+    env('EDITORIAL_BACKFILL_REFRESH_ALL') === '1' || env('EDITORIAL_BACKFILL_REFRESH_ALL').toLowerCase() === 'true'
 
   const sb = createClient(supabaseUrl, serviceKey)
-  const symbols = await fetchAllSymbols(sb)
+  const scoresCache = await fetchAllSymbolsFromScoresAndCache(sb)
   const moatMap = await fetchMoatMap(sb)
   const packMap = await fetchLatestPackBySymbol(sb)
 
-  const todo = symbols.filter((s) => needsWork(s, moatMap.get(s)))
+  const candidates = buildWorkSet(scoresCache, moatMap)
+  const todo = candidates.filter((s) => shouldProcessSymbol(moatMap.get(s), refreshAllAuto))
   const work = limit > 0 ? todo.slice(0, limit) : todo
 
   console.log(
-    `Symbols: ${symbols.length} total, ${todo.length} need fill, processing ${work.length}. Pack cache hits: ${packMap.size}.`,
+    `Universe: ${scoresCache.length} from scores/cache; ${moatMap.size} moat rows; ${candidates.length} union; ${todo.length} to process; running ${work.length}. Pack cache: ${packMap.size}. refresh_all_auto=${refreshAllAuto}`,
   )
 
   let ok = 0
@@ -158,10 +189,14 @@ async function main(): Promise<void> {
     process.stdout.write(`[${i + 1}/${work.length}] ${sym} … `)
 
     try {
-      let pack = packMap.get(sym)
-      if (!pack) {
-        pack = (await fetchProfileOnly(sym, fmpKey)) ?? undefined
+      if (curated && existing?.recent_deals_body?.trim()) {
+        console.log('skip (curated, deals present)')
+        skip++
+        continue
       }
+
+      let pack = packMap.get(sym)
+      if (!pack) pack = (await fetchProfileOnly(sym, fmpKey)) ?? undefined
       if (!pack) {
         console.log('skip (no profile)')
         skip++
@@ -175,52 +210,43 @@ async function main(): Promise<void> {
         continue
       }
 
-      const gen = generateEditorialFromProfile(input)
-      const dealsOverride = RECENT_DEALS_OVERRIDES[sym]
-      if (dealsOverride) gen.recentDealsBody = dealsOverride
-      const payload: Record<string, unknown> = {
-        symbol: sym,
-        updated_at: new Date().toISOString(),
-      }
-
-      if (!existing) {
-        payload.body = gen.moatBody
-        payload.how_they_make_money_body = gen.howTheyMakeMoneyBody
-        payload.recent_deals_body = gen.recentDealsBody
-        payload.content_source = 'auto_generated'
-      } else if (curated) {
-        if (!existing.recent_deals_body?.trim()) {
-          payload.recent_deals_body = gen.recentDealsBody
-        } else {
-          console.log('skip (curated complete)')
-          skip++
-          continue
-        }
-      } else {
-        if (moatCopyMissing(existing.body, existing.how_they_make_money_body)) {
-          payload.body = gen.moatBody
-          payload.how_they_make_money_body = gen.howTheyMakeMoneyBody
-        }
-        if (!existing.recent_deals_body?.trim()) {
-          payload.recent_deals_body = gen.recentDealsBody
-        }
-        payload.content_source = 'auto_generated'
-      }
+      const pilot = pilotEditorialForSymbol(sym)
+      const rawGen = pilot ?? generateEditorialFromProfile(input)
+      const gen = mergeGenerated(rawGen, sym)
 
       if (curated && existing) {
         const { error } = await sb
           .from('company_moat_summaries')
           .update({
-            recent_deals_body: payload.recent_deals_body as string,
-            updated_at: payload.updated_at as string,
+            recent_deals_body: gen.recentDealsBody,
+            updated_at: new Date().toISOString(),
           })
           .eq('symbol', sym)
         if (error) throw new Error(error.message)
-        console.log('deals only (update)')
+        console.log('curated: recent_deals only')
       } else {
-        const { error } = await sb.from('company_moat_summaries').upsert(payload, { onConflict: 'symbol' })
+        const merged = refreshAllAuto
+          ? {
+              body: gen.moatBody,
+              how_they_make_money_body: gen.howTheyMakeMoneyBody,
+              recent_deals_body: gen.recentDealsBody,
+            }
+          : {
+              body: existing?.body?.trim() || gen.moatBody,
+              how_they_make_money_body: existing?.how_they_make_money_body?.trim() || gen.howTheyMakeMoneyBody,
+              recent_deals_body: existing?.recent_deals_body?.trim() || gen.recentDealsBody,
+            }
+        const { error } = await sb.from('company_moat_summaries').upsert(
+          {
+            symbol: sym,
+            ...merged,
+            content_source: 'auto_generated',
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'symbol' },
+        )
         if (error) throw new Error(error.message)
-        console.log('upserted')
+        console.log(refreshAllAuto ? 'auto: full refresh' : 'auto: gap fill')
       }
       ok++
     } catch (e) {
