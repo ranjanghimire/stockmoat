@@ -4,20 +4,25 @@
  *
  * Non-curated (auto_generated): fills any empty of body / how_they_make_money / recent_deals.
  *   Set EDITORIAL_BACKFILL_REFRESH_ALL=1 to regenerate all three for every auto row (heavy).
- * Curated: never touches body/how; only sets recent_deals_body if currently empty.
+ * Curated: never touches body/how; by default only sets recent_deals_body when empty,
+ *   or when existing text matches generic IR/automated-summary filler (see recentDealsOverrides).
+ *   One-time: EDITORIAL_BACKFILL_CURATED_RECENT_DEALS_ALL=1 regenerates recent_deals_body for
+ *   every curated row (still deals-only; NVDA/AMD use RECENT_DEALS_OVERRIDES).
  *
  *   npm run backfill:editorial
+ *   npm run backfill:editorial:curated-recent-all   # one-time curated recent_deals sweep
  *
  * Env: fmpApiKey, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Optional: BACKFILL_GAP_MS (default 400), BACKFILL_LIMIT (first N only),
- *   EDITORIAL_BACKFILL_REFRESH_ALL=1 (full refresh all auto rows)
+ *   EDITORIAL_BACKFILL_REFRESH_ALL=1 (full refresh all auto rows),
+ *   EDITORIAL_BACKFILL_CURATED_RECENT_DEALS_ALL=1 (full recent_deals refresh for all curated)
  */
 import { config as loadDotenv } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import type { GeneratedEditorial } from '../src/lib/editorial/generateEditorialFromProfile'
 import { generateEditorialFromProfile } from '../src/lib/editorial/generateEditorialFromProfile'
 import { pilotEditorialForSymbol } from '../src/lib/editorial/pilotEditorialTexts'
-import { RECENT_DEALS_OVERRIDES } from '../src/lib/editorial/recentDealsOverrides'
+import { RECENT_DEALS_OVERRIDES, isGenericRecentDealsFiller } from '../src/lib/editorial/recentDealsOverrides'
 import { editorialInputFromRawPack } from '../src/lib/editorial/profileFromRawPack'
 import type { CompanyRawPack } from '../src/lib/fmp/fetchCompanyRawPack'
 import { fmpGet } from '../src/lib/fmp/http'
@@ -117,11 +122,23 @@ async function fetchProfileOnly(sym: string, apiKey: string): Promise<CompanyRaw
   }
 }
 
-function buildWorkSet(scoresCache: string[], moatMap: Map<string, MoatRow>): string[] {
+function buildWorkSet(
+  scoresCache: string[],
+  moatMap: Map<string, MoatRow>,
+  includeEveryCurated: boolean,
+): string[] {
   const set = new Set<string>()
   for (const s of scoresCache) set.add(s)
   for (const [sym, row] of moatMap) {
-    if (row.content_source !== 'curated') set.add(sym)
+    if (row.content_source !== 'curated') {
+      set.add(sym)
+    } else if (includeEveryCurated) {
+      set.add(sym)
+    }
+  }
+  for (const s of Object.keys(RECENT_DEALS_OVERRIDES)) {
+    const u = s.trim().toUpperCase()
+    if (u) set.add(u)
   }
   return [...set].sort()
 }
@@ -136,11 +153,20 @@ function autoRowNeedsWork(row: MoatRow, refreshAllAuto: boolean): boolean {
 }
 
 function shouldProcessSymbol(
+  sym: string,
   row: MoatRow | undefined,
   refreshAllAuto: boolean,
+  refreshAllCuratedRecentDeals: boolean,
 ): boolean {
   if (!row) return true
-  if (row.content_source === 'curated') return !row.recent_deals_body?.trim()
+  if (row.content_source === 'curated') {
+    if (refreshAllCuratedRecentDeals) return true
+    if (RECENT_DEALS_OVERRIDES[sym]) return true
+    const d = row.recent_deals_body?.trim()
+    if (!d) return true
+    if (isGenericRecentDealsFiller(d)) return true
+    return false
+  }
   return autoRowNeedsWork(row, refreshAllAuto)
 }
 
@@ -163,18 +189,23 @@ async function main(): Promise<void> {
   const limit = Number.parseInt(env('BACKFILL_LIMIT', '0'), 10) || 0
   const refreshAllAuto =
     env('EDITORIAL_BACKFILL_REFRESH_ALL') === '1' || env('EDITORIAL_BACKFILL_REFRESH_ALL').toLowerCase() === 'true'
+  const refreshAllCuratedRecentDeals =
+    env('EDITORIAL_BACKFILL_CURATED_RECENT_DEALS_ALL') === '1' ||
+    env('EDITORIAL_BACKFILL_CURATED_RECENT_DEALS_ALL').toLowerCase() === 'true'
 
   const sb = createClient(supabaseUrl, serviceKey)
   const scoresCache = await fetchAllSymbolsFromScoresAndCache(sb)
   const moatMap = await fetchMoatMap(sb)
   const packMap = await fetchLatestPackBySymbol(sb)
 
-  const candidates = buildWorkSet(scoresCache, moatMap)
-  const todo = candidates.filter((s) => shouldProcessSymbol(moatMap.get(s), refreshAllAuto))
+  const candidates = buildWorkSet(scoresCache, moatMap, refreshAllCuratedRecentDeals)
+  const todo = candidates.filter((s) =>
+    shouldProcessSymbol(s, moatMap.get(s), refreshAllAuto, refreshAllCuratedRecentDeals),
+  )
   const work = limit > 0 ? todo.slice(0, limit) : todo
 
   console.log(
-    `Universe: ${scoresCache.length} from scores/cache; ${moatMap.size} moat rows; ${candidates.length} union; ${todo.length} to process; running ${work.length}. Pack cache: ${packMap.size}. refresh_all_auto=${refreshAllAuto}`,
+    `Universe: ${scoresCache.length} from scores/cache; ${moatMap.size} moat rows; ${candidates.length} union; ${todo.length} to process; running ${work.length}. Pack cache: ${packMap.size}. refresh_all_auto=${refreshAllAuto} refresh_all_curated_recent=${refreshAllCuratedRecentDeals}`,
   )
 
   let ok = 0
@@ -189,9 +220,30 @@ async function main(): Promise<void> {
     process.stdout.write(`[${i + 1}/${work.length}] ${sym} … `)
 
     try {
-      if (curated && existing?.recent_deals_body?.trim()) {
+      if (
+        curated &&
+        existing?.recent_deals_body?.trim() &&
+        !refreshAllCuratedRecentDeals &&
+        !RECENT_DEALS_OVERRIDES[sym] &&
+        !isGenericRecentDealsFiller(existing.recent_deals_body)
+      ) {
         console.log('skip (curated, deals present)')
         skip++
+        continue
+      }
+
+      if (curated && RECENT_DEALS_OVERRIDES[sym]) {
+        const { error } = await sb
+          .from('company_moat_summaries')
+          .update({
+            recent_deals_body: RECENT_DEALS_OVERRIDES[sym],
+            updated_at: new Date().toISOString(),
+          })
+          .eq('symbol', sym)
+        if (error) throw new Error(error.message)
+        console.log('curated: recent_deals override')
+        ok++
+        if (i < work.length - 1 && gapMs > 0) await sleep(gapMs)
         continue
       }
 

@@ -1,3 +1,4 @@
+import { RECENT_DEALS_OVERRIDES, isGenericRecentDealsFiller } from './editorial/recentDealsOverrides'
 import { getSupabaseBrowserClient } from './supabaseClient'
 
 export interface CompanyEditorialSummaries {
@@ -36,9 +37,14 @@ export async function fetchCompanyEditorialSummaries(symbol: string): Promise<Co
 
   if (error || !data) return { ...empty }
 
+  let recentDealsBody = trimOrNull(data.recent_deals_body)
+  const dealsOverride = RECENT_DEALS_OVERRIDES[sym]
+  if (dealsOverride) recentDealsBody = dealsOverride
+  else if (recentDealsBody && isGenericRecentDealsFiller(recentDealsBody)) recentDealsBody = null
+
   return {
     moatBody: trimOrNull(data.body),
     howTheyMakeMoneyBody: trimOrNull(data.how_they_make_money_body),
-    recentDealsBody: trimOrNull(data.recent_deals_body),
+    recentDealsBody,
   }
 }
