@@ -388,13 +388,7 @@ export default function HomePage() {
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white/60 py-6 text-center text-xs text-slate-500 backdrop-blur">
-        Client keeps a small in-memory analysis cache (10 min) per ticker/profile; use Refresh to bypass. FMP peer
-        medians load in dev by default (<span className="font-mono">VITE_FMP_FETCH_PEERS=false</span> to skip). Optional Yahoo
-        company pack (<span className="font-mono">VITE_USE_YAHOO=true</span>) uses yahoo-finance2 on the Vite dev server. Price
-        charts prefer FMP historical EOD (~2y weekly + ~6mo daily OHLC), then Yahoo if FMP fails or the key is missing. Production builds use FMP for fundamentals when <span className="font-mono">fmpApiKey</span> is set at
-        build time. Prefer a backend proxy so keys stay off public bundles. The <span className="font-mono">/screen</span> view
-        reads batch scores from Supabase when <span className="font-mono">VITE_SUPABASE_URL</span> and{' '}
-        <span className="font-mono">VITE_SUPABASE_ANON_KEY</span> are set.
+        Copyright StockMoat 2026
       </footer>
     </div>
   )
