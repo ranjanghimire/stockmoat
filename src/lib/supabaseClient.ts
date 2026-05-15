@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { MoatContentSource } from './moatContentSource'
 import type { PriceChartsPayload } from './yahoo/weeklyChartTypes'
 
 export interface ScreenScoreRow {
@@ -22,11 +23,13 @@ export interface ScreenChartRow {
   updated_at: string
 }
 
-/** Row from `company_moat_summaries` (curated moat + revenue narrative on Home MOAT ANALYSIS). */
+/** Row from `company_moat_summaries` (moat + revenue narrative on Home MOAT ANALYSIS). */
 export interface CompanyMoatSummaryRow {
   symbol: string
   body: string
   how_they_make_money_body?: string | null
+  /** `curated` = human; `auto_generated` = model/nightly job — query for review with `= 'auto_generated'`. */
+  content_source: MoatContentSource
   updated_at: string
 }
 

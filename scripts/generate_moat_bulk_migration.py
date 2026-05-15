@@ -47,9 +47,10 @@ def main() -> int:
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = [
-        "-- Bulk seed: curated moat + how they make money (generated; do not hand-edit rows).",
+        "-- Bulk seed: human-curated moat + how they make money (CSV export).",
+        "-- Requires migration 20260520120000_company_moat_summaries_content_source.sql applied first.",
         "",
-        "insert into public.company_moat_summaries (symbol, body, how_they_make_money_body)",
+        "insert into public.company_moat_summaries (symbol, body, how_they_make_money_body, content_source)",
         "values",
     ]
 
@@ -57,7 +58,7 @@ def main() -> int:
     value_lines = []
     for sym, (moat, how) in items:
         how_sql = sql_literal(how) if how else "null"
-        value_lines.append(f"  ({sql_literal(sym)}, {sql_literal(moat)}, {how_sql})")
+        value_lines.append(f"  ({sql_literal(sym)}, {sql_literal(moat)}, {how_sql}, 'curated')")
 
     lines.append(",\n".join(value_lines))
     lines.extend(
@@ -66,6 +67,7 @@ def main() -> int:
             "on conflict (symbol) do update set",
             "  body = excluded.body,",
             "  how_they_make_money_body = excluded.how_they_make_money_body,",
+            "  content_source = excluded.content_source,",
             "  updated_at = now();",
             "",
         ]
