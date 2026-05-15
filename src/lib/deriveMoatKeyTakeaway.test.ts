@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MoatAnalysis } from './computeMoatAnalysis'
-import { deriveMoatKeyTakeaway } from './deriveMoatKeyTakeaway'
+import { companyNameWithTicker, deriveMoatKeyTakeaway } from './deriveMoatKeyTakeaway'
 
 function baseAnalysis(overrides: Partial<MoatAnalysis> = {}): MoatAnalysis {
   return {
@@ -18,11 +18,26 @@ function baseAnalysis(overrides: Partial<MoatAnalysis> = {}): MoatAnalysis {
   }
 }
 
+describe('companyNameWithTicker', () => {
+  it('combines display name and ticker', () => {
+    expect(companyNameWithTicker('Microsoft', 'MSFT')).toBe('Microsoft (MSFT)')
+  })
+  it('returns ticker only when display name matches symbol', () => {
+    expect(companyNameWithTicker('MSFT', 'MSFT')).toBe('MSFT')
+    expect(companyNameWithTicker('msft', 'MSFT')).toBe('MSFT')
+  })
+  it('returns ticker when display name is empty', () => {
+    expect(companyNameWithTicker('', 'AAPL')).toBe('AAPL')
+    expect(companyNameWithTicker(undefined, 'AAPL')).toBe('AAPL')
+  })
+})
+
 describe('deriveMoatKeyTakeaway', () => {
   it('returns neutral when fundamentals are missing', () => {
     const r = deriveMoatKeyTakeaway(baseAnalysis({ fundamentals: undefined }))
     expect(r.primary?.id).toBe('no_fundamentals')
     expect(r.primary?.tone).toBe('neutral')
+    expect(r.primary?.text).toContain('Acme Co (ACME)')
   })
 
   it('flags severe balance sheet stress when liabilities exceed assets', () => {
@@ -52,6 +67,7 @@ describe('deriveMoatKeyTakeaway', () => {
     )
     expect(r.primary?.id).toBe('balance_sheet_stress')
     expect(r.primary?.text).toContain('severe balance sheet stress')
+    expect(r.primary?.text).toContain('Acme Co (ACME)')
     expect(r.primary?.text).not.toContain('bankruptcy')
   })
 
@@ -65,6 +81,7 @@ describe('deriveMoatKeyTakeaway', () => {
       }),
     )
     expect(r.primary?.id).toBe('ni_loss_ttm')
+    expect(r.primary?.text).toContain('Acme Co (ACME)')
     expect(r.primary?.text).toContain('lost about')
     expect(r.primary?.text).toContain('$1.50B')
     expect(r.primary?.text).not.toContain('lost about -$')
@@ -81,6 +98,7 @@ describe('deriveMoatKeyTakeaway', () => {
       }),
     )
     expect(r.primary?.id).toBe('ni_profit_ttm')
+    expect(r.primary?.text).toContain('Acme Co (ACME)')
     expect(r.primary?.text).toContain('earned about')
     expect(r.primary?.text).toContain('$72.00B')
   })
@@ -96,6 +114,7 @@ describe('deriveMoatKeyTakeaway', () => {
       }),
     )
     expect(r.primary?.id).toBe('fcf_negative_vs_profit')
+    expect(r.primary?.text).toContain('Acme Co (ACME)')
   })
 
   it('adds gate failure as secondary on profitable TTM', () => {

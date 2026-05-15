@@ -19,6 +19,17 @@ const NEAR_ZERO_NI = 5_000_000
 const RAPID_GROWTH_CAGR = 0.12
 const MEANINGFUL_DECLINE_CAGR = -0.1
 
+/**
+ * Human-facing label, e.g. `Microsoft (MSFT)`.
+ * Falls back to the ticker alone when the display name is missing or identical to the symbol.
+ */
+export function companyNameWithTicker(displayName: string | undefined, ticker: string): string {
+  const sym = ticker.trim().toUpperCase()
+  const raw = displayName?.trim() ?? ''
+  if (!raw || raw.toUpperCase() === sym) return sym
+  return `${raw} (${sym})`
+}
+
 function latestAnnualBalanceStress(fundamentals: NonNullable<MoatAnalysis['fundamentals']>): boolean {
   const yearly = fundamentals.balanceCharts?.yearly
   if (!yearly?.length) return false
@@ -46,7 +57,7 @@ function netIncomeCagr3y(points: IncomeChartPoint[]): number | undefined {
 }
 
 function growthTakeawayFromYearly(
-  ticker: string,
+  companyLabel: string,
   points: IncomeChartPoint[],
 ): KeyTakeawayLine | undefined {
   if (points.length < 2) return undefined
@@ -55,14 +66,14 @@ function growthTakeawayFromYearly(
     return {
       id: 'growth_ni_cagr',
       tone: 'positive',
-      text: `${ticker} has grown net income at a strong pace over the last three fiscal years.`,
+      text: `${companyLabel} has grown net income at a strong pace over the last three fiscal years.`,
     }
   }
   if (cagr !== undefined && cagr <= MEANINGFUL_DECLINE_CAGR) {
     return {
       id: 'decline_ni_cagr',
       tone: 'caution',
-      text: `${ticker}'s net income has declined meaningfully over the last three fiscal years.`,
+      text: `${companyLabel}'s net income has declined meaningfully over the last three fiscal years.`,
     }
   }
   const last = points[points.length - 1]?.netIncome
@@ -72,14 +83,14 @@ function growthTakeawayFromYearly(
     return {
       id: 'growth_ni_yoy',
       tone: 'positive',
-      text: `${ticker}'s latest fiscal year net income is sharply higher than the prior year.`,
+      text: `${companyLabel}'s latest fiscal year net income is sharply higher than the prior year.`,
     }
   }
   if (last < prev * 0.85 && prev > 0) {
     return {
       id: 'shrink_ni_yoy',
       tone: 'caution',
-      text: `${ticker}'s latest fiscal year net income is down versus the prior year.`,
+      text: `${companyLabel}'s latest fiscal year net income is down versus the prior year.`,
     }
   }
   return undefined
@@ -88,7 +99,7 @@ function growthTakeawayFromYearly(
 type NetIncomeBasis = 'ttm' | 'latest_fy'
 
 function weakCashConversion(
-  ticker: string,
+  companyLabel: string,
   ni: number,
   fcf: number | undefined,
   niBasis: NetIncomeBasis = 'ttm',
@@ -99,7 +110,7 @@ function weakCashConversion(
     return {
       id: 'fcf_negative_vs_profit',
       tone: 'caution',
-      text: `${ticker} shows ${niPhrase}, but TTM free cash flow is negative — cash conversion deserves a closer look.`,
+      text: `${companyLabel} shows ${niPhrase}, but TTM free cash flow is negative — cash conversion deserves a closer look.`,
     }
   }
   if (fcf < ni * 0.25) {
@@ -110,7 +121,7 @@ function weakCashConversion(
     return {
       id: 'fcf_lags_ni',
       tone: 'caution',
-      text: `${ticker}'s ${compare}, which can signal heavy reinvestment or weaker cash conversion.`,
+      text: `${companyLabel}'s ${compare}, which can signal heavy reinvestment or weaker cash conversion.`,
     }
   }
   return undefined
@@ -121,7 +132,8 @@ function weakCashConversion(
  * Rules are ordered: data quality → balance sheet stress → cash vs earnings → profitability → growth hints.
  */
 export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayResult {
-  const { ticker, fundamentals, anyGateFail } = analysis
+  const { ticker, displayName, fundamentals, anyGateFail } = analysis
+  const co = companyNameWithTicker(displayName, ticker)
   const yearly = fundamentals?.incomeCharts?.yearly ?? []
 
   if (!fundamentals) {
@@ -129,7 +141,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
       primary: {
         id: 'no_fundamentals',
         tone: 'neutral',
-        text: `Not enough reported fundamentals are loaded yet to summarize ${ticker}.`,
+        text: `Not enough reported fundamentals are loaded yet to summarize ${co}.`,
       },
     }
   }
@@ -144,7 +156,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
       primary: {
         id: 'sparse_fundamentals',
         tone: 'neutral',
-        text: `Not enough reported income history is available yet to headline ${ticker}'s profitability.`,
+        text: `Not enough reported income history is available yet to headline ${co}'s profitability.`,
       },
     }
   }
@@ -153,7 +165,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
     const primary: KeyTakeawayLine = {
       id: 'balance_sheet_stress',
       tone: 'caution',
-      text: `${ticker}: latest reported balance sheet shows liabilities above assets, which points to severe balance sheet stress.`,
+      text: `${co}: latest reported balance sheet shows liabilities above assets, which points to severe balance sheet stress.`,
     }
     const secondary = anyGateFail
       ? ({
@@ -165,7 +177,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
     return { primary, secondary }
   }
 
-  const fcfWeak = hasTtmNi && niTtm! > 0 ? weakCashConversion(ticker, niTtm!, fundamentals.freeCashFlowTtmUsd, 'ttm') : undefined
+  const fcfWeak = hasTtmNi && niTtm! > 0 ? weakCashConversion(co, niTtm!, fundamentals.freeCashFlowTtmUsd, 'ttm') : undefined
   if (fcfWeak) {
     const secondary = anyGateFail
       ? ({
@@ -173,7 +185,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
           tone: 'caution',
           text: 'The moat model flags at least one critical gate failure.',
         } satisfies KeyTakeawayLine)
-      : growthTakeawayFromYearly(ticker, yearly)
+      : growthTakeawayFromYearly(co, yearly)
     return { primary: fcfWeak, secondary }
   }
 
@@ -184,9 +196,9 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
       const primary: KeyTakeawayLine = {
         id: 'ni_near_zero',
         tone: 'neutral',
-        text: `${ticker} is roughly break-even on a trailing-twelve-month net income basis.`,
+        text: `${co} is roughly break-even on a trailing-twelve-month net income basis.`,
       }
-      const growth = growthTakeawayFromYearly(ticker, yearly)
+      const growth = growthTakeawayFromYearly(co, yearly)
       const secondary =
         (anyGateFail
           ? {
@@ -202,7 +214,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
       const primary: KeyTakeawayLine = {
         id: 'ni_loss_ttm',
         tone: 'negative',
-        text: `${ticker} lost about ${formatCompactUsd(Math.abs(ni))} per year on a trailing-twelve-month net income basis.`,
+        text: `${co} lost about ${formatCompactUsd(Math.abs(ni))} per year on a trailing-twelve-month net income basis.`,
       }
       const secondary = anyGateFail
         ? ({
@@ -217,10 +229,10 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
     const primary: KeyTakeawayLine = {
       id: 'ni_profit_ttm',
       tone: 'positive',
-      text: `${ticker} earned about ${formatCompactUsd(ni)} in net profit over the trailing twelve months.`,
+      text: `${co} earned about ${formatCompactUsd(ni)} in net profit over the trailing twelve months.`,
     }
-    const cashSecond = weakCashConversion(ticker, ni, fundamentals.freeCashFlowTtmUsd, 'ttm')
-    const growth = growthTakeawayFromYearly(ticker, yearly)
+    const cashSecond = weakCashConversion(co, ni, fundamentals.freeCashFlowTtmUsd, 'ttm')
+    const growth = growthTakeawayFromYearly(co, yearly)
     const secondary =
       cashSecond ??
       (anyGateFail
@@ -241,7 +253,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
         primary: {
           id: 'fy_ni_near_zero',
           tone: 'neutral',
-          text: `${ticker} looks roughly break-even on the latest full-year net income figure (TTM net income unavailable).`,
+          text: `${co} looks roughly break-even on the latest full-year net income figure (TTM net income unavailable).`,
         },
         secondary: anyGateFail
           ? {
@@ -249,7 +261,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
               tone: 'caution',
               text: 'The moat model flags at least one critical gate failure.',
             }
-          : growthTakeawayFromYearly(ticker, yearly),
+          : growthTakeawayFromYearly(co, yearly),
       }
     }
     if (fyNi < 0) {
@@ -257,7 +269,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
         primary: {
           id: 'fy_ni_loss',
           tone: 'negative',
-          text: `${ticker} lost about ${formatCompactUsd(Math.abs(fyNi))} on the latest full-year net income figure (TTM net income unavailable).`,
+          text: `${co} lost about ${formatCompactUsd(Math.abs(fyNi))} on the latest full-year net income figure (TTM net income unavailable).`,
         },
         secondary: anyGateFail
           ? {
@@ -272,10 +284,10 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
       primary: {
         id: 'fy_ni_profit',
         tone: 'positive',
-        text: `${ticker} earned about ${formatCompactUsd(fyNi)} in net profit on the latest full-year report (TTM net income unavailable).`,
+        text: `${co} earned about ${formatCompactUsd(fyNi)} in net profit on the latest full-year report (TTM net income unavailable).`,
       },
       secondary:
-        weakCashConversion(ticker, fyNi, fundamentals.freeCashFlowTtmUsd, 'latest_fy') ??
+        weakCashConversion(co, fyNi, fundamentals.freeCashFlowTtmUsd, 'latest_fy') ??
         (anyGateFail
           ? {
               id: 'gate_fail_fy_profit',
@@ -283,11 +295,11 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
               text: 'The moat model flags at least one critical gate failure.',
             }
           : undefined) ??
-        growthTakeawayFromYearly(ticker, yearly),
+        growthTakeawayFromYearly(co, yearly),
     }
   }
 
-  const growthOnly = growthTakeawayFromYearly(ticker, yearly)
+  const growthOnly = growthTakeawayFromYearly(co, yearly)
   if (growthOnly) {
     return {
       primary: growthOnly,
@@ -305,7 +317,7 @@ export function deriveMoatKeyTakeaway(analysis: MoatAnalysis): MoatKeyTakeawayRe
     primary: {
       id: 'fallback',
       tone: 'neutral',
-      text: `Fundamentals for ${ticker} are present, but net income could not be summarized cleanly from the latest pull.`,
+      text: `Fundamentals for ${co} are present, but net income could not be summarized cleanly from the latest pull.`,
     },
     secondary: anyGateFail
       ? {

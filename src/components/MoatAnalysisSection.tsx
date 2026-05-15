@@ -1,6 +1,12 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MoatAnalysis } from '../lib/computeMoatAnalysis'
-import { deriveMoatKeyTakeaway, type KeyTakeawayLine, type TakeawayTone } from '../lib/deriveMoatKeyTakeaway'
+import {
+  companyNameWithTicker,
+  deriveMoatKeyTakeaway,
+  type KeyTakeawayLine,
+  type TakeawayTone,
+} from '../lib/deriveMoatKeyTakeaway'
+import { fetchCompanyMoatSummary } from '../lib/fetchCompanyMoatSummary'
 
 function toneClass(tone: TakeawayTone): string {
   switch (tone) {
@@ -25,16 +31,62 @@ function TakeawayBlock({ line, prominent }: { line: KeyTakeawayLine; prominent?:
   )
 }
 
+function SubsectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-moat-accent-dim">{children}</p>
+  )
+}
+
+function CompanyHeaderLabel({ displayName, ticker }: { displayName: string; ticker: string }) {
+  const sym = ticker.trim().toUpperCase()
+  const name = displayName.trim()
+  const combined = companyNameWithTicker(displayName, ticker)
+  if (!name || name.toUpperCase() === sym) {
+    return <span className="font-mono text-sm font-semibold text-slate-600">{sym}</span>
+  }
+  return (
+    <span className="text-sm text-slate-700" title={combined}>
+      <span className="font-medium text-moat-ink">{name}</span>{' '}
+      <span className="font-mono text-slate-600">({sym})</span>
+    </span>
+  )
+}
+
 function MoatSkeleton() {
   return (
     <div className="animate-pulse space-y-4" aria-hidden>
       <div className="h-4 w-40 rounded bg-slate-200/90" />
-      <div className="h-3 w-28 rounded bg-slate-200/80" />
       <div className="space-y-2 pt-1">
         <div className="h-4 w-full max-w-3xl rounded bg-slate-100" />
         <div className="h-4 w-full max-w-2xl rounded bg-slate-100" />
         <div className="h-4 w-full max-w-xl rounded bg-slate-100" />
       </div>
+    </div>
+  )
+}
+
+function MoatWhatsTheMoatSubsection({ ticker }: { ticker: string }) {
+  const [body, setBody] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchCompanyMoatSummary(ticker).then((text) => {
+      if (cancelled) return
+      setBody(text)
+      setReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [ticker])
+
+  if (!ready || !body) return null
+
+  return (
+    <div>
+      <SubsectionLabel>What&apos;s the moat?</SubsectionLabel>
+      <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{body}</p>
     </div>
   )
 }
@@ -72,10 +124,19 @@ export function MoatAnalysisSection({
         </p>
       )
     }
+
+    const sym = analysis.ticker.trim().toUpperCase()
+
     return (
-      <div className="space-y-3">
-        <TakeawayBlock line={takeaway.primary} prominent />
-        {takeaway.secondary ? <TakeawayBlock line={takeaway.secondary} /> : null}
+      <div className="space-y-8">
+        <div>
+          <SubsectionLabel>Key takeaway</SubsectionLabel>
+          <div className="mt-2 space-y-3">
+            <TakeawayBlock line={takeaway.primary} prominent />
+            {takeaway.secondary ? <TakeawayBlock line={takeaway.secondary} /> : null}
+          </div>
+        </div>
+        <MoatWhatsTheMoatSubsection key={sym} ticker={sym} />
       </div>
     )
   })()
@@ -85,12 +146,13 @@ export function MoatAnalysisSection({
       <div className="flex flex-col gap-1 border-b border-slate-100 pb-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-display text-xl tracking-tight text-moat-ink md:text-2xl">MOAT ANALYSIS</h2>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-moat-accent-dim">Key takeaway</p>
         </div>
         {!loading && analysis ? (
-          <p className="mt-2 font-mono text-sm text-slate-500 md:mt-0">{analysis.ticker}</p>
+          <div className="mt-2 md:mt-0 md:text-right">
+            <CompanyHeaderLabel displayName={analysis.displayName} ticker={analysis.ticker} />
+          </div>
         ) : (
-          <p className="mt-2 font-mono text-sm text-slate-400 md:mt-0">{ticker}</p>
+          <p className="mt-2 font-mono text-sm text-slate-400 md:mt-0">{ticker.trim().toUpperCase() || '—'}</p>
         )}
       </div>
       <div className="pt-4">{body}</div>

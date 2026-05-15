@@ -22,6 +22,13 @@ export interface ScreenChartRow {
   updated_at: string
 }
 
+/** Row from `company_moat_summaries` (curated moat blurb on Home MOAT ANALYSIS). */
+export interface CompanyMoatSummaryRow {
+  symbol: string
+  body: string
+  updated_at: string
+}
+
 let client: SupabaseClient | null = null
 
 export function getSupabaseBrowserClient(): SupabaseClient | null {
