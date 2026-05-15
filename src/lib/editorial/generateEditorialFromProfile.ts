@@ -6,6 +6,7 @@ export interface EditorialProfileInput {
   sector: string
   industry: string
   description: string
+  /** From FMP profile `marketCap` when available. */
   mktCapUsd?: number
 }
 
@@ -27,10 +28,47 @@ function firstSentence(text: string, maxLen = 320): string {
   return sent.length > maxLen ? `${sent.slice(0, maxLen - 1).trim()}…` : sent
 }
 
-function moatBySector(sector: string, industry: string, co: string): string {
+/** Micro / small cap threshold (USD) for “no moat yet” heuristics. */
+const SMALL_CAP_USD = 2_000_000_000
+
+const EARLY_STAGE_HINT =
+  /\b(clinical[- ]stage|preclinical|pre-revenue|development[- ]stage|early[- ]stage|investigational|no commercial product|not yet generate|immaterial revenue|limited revenue|limited operating history)\b/i
+
+const BIOTECH_INDUSTRY = /\b(biotech|biotechnology|pharma|pharmaceutical|drug discovery|therapeutic)\b/i
+
+function descriptionHasUniversityLicense(s: string): boolean {
+  return (
+    /\b(university|college)\b.*\b(license|licens)/i.test(s) ||
+    /\b(license agreement).*\b(university|college)\b/i.test(s)
+  )
+}
+
+function looksLikeEarlyStageBiotech(industry: string, description: string, mktCap?: number): boolean {
+  const ind = industry.toLowerCase()
+  if (!BIOTECH_INDUSTRY.test(ind)) return false
+  if (EARLY_STAGE_HINT.test(description)) return true
+  if (mktCap !== undefined && Number.isFinite(mktCap) && mktCap < SMALL_CAP_USD) return true
+  return false
+}
+
+function moatHonest(
+  co: string,
+  sector: string,
+  industry: string,
+  description: string,
+  mktCap?: number,
+): string {
+  if (looksLikeEarlyStageBiotech(industry, description, mktCap)) {
+    return `${co} does not currently have a clear competitive moat.`
+  }
+
   const s = sector.toLowerCase()
   const ind = industry.toLowerCase()
+
   if (s.includes('technology') || ind.includes('software') || ind.includes('semiconductor')) {
+    if (mktCap !== undefined && mktCap < SMALL_CAP_USD && EARLY_STAGE_HINT.test(description)) {
+      return `${co} does not yet have a proven durable moat; differentiation and scale are still emerging in ${industry}.`
+    }
     return `${co}'s moat comes from product and platform differentiation, R&D scale, and customer switching costs in ${industry}.`
   }
   if (s.includes('financial') || ind.includes('bank') || ind.includes('insurance')) {
@@ -54,35 +92,58 @@ function moatBySector(sector: string, industry: string, co: string): string {
   return `${co}'s moat comes from competitive positioning, scale, and execution within ${industry}.`
 }
 
-const DEAL_KEYWORDS =
-  /\b(partner|partnership|collaborat|license|licensing|joint venture|strategic agreement|alliance|distribut|supply agreement|acqui|merger|investment in|cloud agreement|multi-year)\b/i
+const DEAL_MATERIAL =
+  /\b(acqui|merger|definitive agreement|strategic partnership|collaborat(e|ion) with|joint development|co-development|52-week|supply agreement with|alliance with)\b/i
 
-function sentences(text: string): string[] {
-  return cleanText(text)
+/** Narrow university / institutional IP license — not a commercial strategic deal. */
+function isNarrowIpLicenseSentence(sentence: string): boolean {
+  return descriptionHasUniversityLicense(sentence) && !DEAL_MATERIAL.test(sentence)
+}
+
+function recentDealsHonest(co: string, description: string): string {
+  const sentences = cleanText(description)
     .split(/(?<=[.!?])\s+/)
     .map((x) => x.trim())
-    .filter((x) => x.length > 40)
-}
+    .filter((x) => x.length > 30)
 
-function recentDealsFromDescription(co: string, description: string, sector: string, industry: string): string {
-  const hits = sentences(description).filter((s) => DEAL_KEYWORDS.test(s)).slice(0, 2)
-  if (hits.length > 0) {
-    const joined = hits.map((s) => (s.endsWith('.') ? s : `${s}.`)).join(' ')
-    return `${co}'s recent strategic activity, as described in public company materials, includes ${joined}`
+  const licenseOnly = sentences.filter((s) => DEAL_MATERIAL.test(s) || /\blicense\b/i.test(s))
+  if (licenseOnly.length > 0 && licenseOnly.every(isNarrowIpLicenseSentence)) {
+    return `${co} has not publicly announced material commercial partnerships; filings describe narrower intellectual‑property or university license arrangements that are not the same as large co‑development or revenue‑sharing deals with strategic customers.`
   }
-  return `${co}'s recent deals and partnerships are best tracked through investor relations and SEC filings; this automated summary highlights ${industry} positioning in ${sector} while specific alliance headlines should be refreshed periodically.`
+
+  const material = sentences.find((s) => DEAL_MATERIAL.test(s))
+  if (material) {
+    const line = material.endsWith('.') ? material : `${material}.`
+    return `${co}'s public disclosures mention strategic or transactional activity, including ${line.charAt(0).toLowerCase()}${line.slice(1)}`
+  }
+
+  return `${co} has not publicly announced material partnerships or commercial deals.`
 }
 
-function howFromDescription(co: string, description: string, industry: string): string {
-  const first = firstSentence(description, 280)
+function howHonest(co: string, description: string, industry: string, mktCap?: number): string {
+  const first = firstSentence(description, 360)
   if (first.length > 60) {
     const lower = first.charAt(0).toLowerCase() + first.slice(1)
+    let base: string
     if (/^(designs|develops|provides|operates|engages|offers|manufactures|distributes|sells|owns)\b/i.test(lower)) {
-      return `${co} makes money by ${lower.replace(/\.$/, '')}.`
+      base = `${co} makes money by ${lower.replace(/\.$/, '')}.`
+    } else {
+      base = `${co} makes money through ${lower.replace(/\.$/, '')}.`
     }
-    return `${co} makes money through ${lower.replace(/\.$/, '')}.`
+
+    if (looksLikeEarlyStageBiotech(industry, description, mktCap) || EARLY_STAGE_HINT.test(description)) {
+      if (!/\b(limited|early|minimal|immaterial|not material)\b/i.test(base)) {
+        return `${base.replace(/\.$/, '')}, though reported revenues remain limited or early‑stage.`
+      }
+    }
+    return base
   }
-  return `${co} makes money by delivering products and services to customers in ${industry}.`
+
+  if (looksLikeEarlyStageBiotech(industry, description, mktCap)) {
+    return `${co} is an early‑stage ${industry} company; product revenue is not yet meaningful relative to R&D spend.`
+  }
+
+  return `${co} makes money by serving customers in ${industry}; see financial statements for revenue mix.`
 }
 
 export function generateEditorialFromProfile(input: EditorialProfileInput): GeneratedEditorial {
@@ -92,8 +153,8 @@ export function generateEditorialFromProfile(input: EditorialProfileInput): Gene
   const description = cleanText(input.description)
 
   return {
-    moatBody: moatBySector(sector, industry, co),
-    howTheyMakeMoneyBody: howFromDescription(co, description, industry),
-    recentDealsBody: recentDealsFromDescription(co, description, sector, industry),
+    moatBody: moatHonest(co, sector, industry, description, input.mktCapUsd),
+    howTheyMakeMoneyBody: howHonest(co, description, industry, input.mktCapUsd),
+    recentDealsBody: recentDealsHonest(co, description),
   }
 }

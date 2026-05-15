@@ -1,4 +1,5 @@
 import type { CompanyRawPack } from '../fmp/fetchCompanyRawPack'
+import { num } from '../fmp/normalize'
 import { industryFromFmpProfile, sectorFromFmpProfile } from '../fmp/profileClassification'
 import type { EditorialProfileInput } from './generateEditorialFromProfile'
 
@@ -17,11 +18,14 @@ export function editorialInputFromRawPack(symbol: string, pack: CompanyRawPack):
 
   if (!description) return null
 
+  const mktCap = num(profile.marketCap, profile.mktCap)
+
   return {
     symbol: sym,
     companyName,
     sector,
     industry,
     description,
+    mktCapUsd: mktCap,
   }
 }
