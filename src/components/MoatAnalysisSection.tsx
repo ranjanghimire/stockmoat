@@ -131,7 +131,7 @@ export function MoatAnalysisSection({
     <section className="rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-md shadow-slate-900/5 backdrop-blur md:p-6">
       <div className="flex flex-col gap-1 border-b border-slate-100 pb-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="font-display text-xl tracking-tight text-moat-ink md:text-2xl">MOAT ANALYSIS</h2>
+          <h2 className="font-display text-xl tracking-tight text-moat-ink md:text-2xl">MOAT SNAPSHOT</h2>
         </div>
         {!loading && analysis ? (
           <div className="mt-2 md:mt-0 md:text-right">
