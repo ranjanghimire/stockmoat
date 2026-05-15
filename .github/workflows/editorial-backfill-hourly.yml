@@ -1,0 +1,38 @@
+# Hourly gap-fill for `company_moat_summaries` when users add tickers during the day.
+# Runs `npm run backfill:editorial` (default mode: only fills missing auto fields; curated rules unchanged).
+# If nothing needs work, the run exits quickly with little FMP usage.
+#
+# Secrets (repo → Settings → Secrets and variables → Actions):
+#   FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#
+# GitHub `schedule` uses UTC and is best-effort (runs may slip).
+
+name: Editorial backfill (hourly)
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  editorial-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BACKFILL_GAP_MS: '400'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Backfill editorial summaries (gap-fill)
+        run: npm run backfill:editorial
