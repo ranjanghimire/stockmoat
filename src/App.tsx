@@ -1,4 +1,5 @@
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
+import AdminMoatSnapshotPage from './pages/AdminMoatSnapshotPage'
 import ChartsPage from './pages/ChartsPage'
 import HomePage from './pages/HomePage'
 import ScreenerPage from './pages/ScreenerPage'
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/screen" element={<ScreenerPage />} />
         <Route path="/charts" element={<ChartsPage />} />
+        <Route path="/admin/moat-snapshot" element={<AdminMoatSnapshotPage />} />
       </Routes>
     </BrowserRouter>
   )

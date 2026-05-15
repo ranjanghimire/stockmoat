@@ -31,16 +31,19 @@ export async function fetchCompanyEditorialSummaries(symbol: string): Promise<Co
 
   const { data, error } = await sb
     .from('company_moat_summaries')
-    .select('body, how_they_make_money_body, recent_deals_body')
+    .select('body, how_they_make_money_body, recent_deals_body, content_source')
     .eq('symbol', sym)
     .maybeSingle()
 
   if (error || !data) return { ...empty }
 
   let recentDealsBody = trimOrNull(data.recent_deals_body)
-  const dealsOverride = RECENT_DEALS_OVERRIDES[sym]
-  if (dealsOverride) recentDealsBody = dealsOverride
-  else if (recentDealsBody && isGenericRecentDealsFiller(recentDealsBody)) recentDealsBody = null
+  const curated = data.content_source === 'curated'
+  if (!curated) {
+    const dealsOverride = RECENT_DEALS_OVERRIDES[sym]
+    if (dealsOverride) recentDealsBody = dealsOverride
+    else if (recentDealsBody && isGenericRecentDealsFiller(recentDealsBody)) recentDealsBody = null
+  }
 
   return {
     moatBody: trimOrNull(data.body),
