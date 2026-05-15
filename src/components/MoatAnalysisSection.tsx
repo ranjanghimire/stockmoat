@@ -6,7 +6,7 @@ import {
   type KeyTakeawayLine,
   type TakeawayTone,
 } from '../lib/deriveMoatKeyTakeaway'
-import { fetchCompanyMoatSummary } from '../lib/fetchCompanyMoatSummary'
+import { fetchCompanyEditorialSummaries } from '../lib/fetchCompanyEditorialSummaries'
 
 function toneClass(tone: TakeawayTone): string {
   switch (tone) {
@@ -31,9 +31,13 @@ function TakeawayBlock({ line, prominent }: { line: KeyTakeawayLine; prominent?:
   )
 }
 
-function SubsectionLabel({ children }: { children: ReactNode }) {
+function SubsectionLabel({ children, sentenceCase }: { children: ReactNode; sentenceCase?: boolean }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-moat-accent-dim">{children}</p>
+    <p
+      className={`text-xs font-semibold text-moat-accent-dim ${sentenceCase ? 'tracking-wide' : 'uppercase tracking-[0.2em]'}`}
+    >
+      {children}
+    </p>
   )
 }
 
@@ -65,15 +69,17 @@ function MoatSkeleton() {
   )
 }
 
-function MoatWhatsTheMoatSubsection({ ticker }: { ticker: string }) {
-  const [body, setBody] = useState<string | null>(null)
+function MoatEditorialSubsections({ displayName, ticker }: { displayName: string; ticker: string }) {
+  const [moatBody, setMoatBody] = useState<string | null>(null)
+  const [howTheyMakeMoneyBody, setHowTheyMakeMoneyBody] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    void fetchCompanyMoatSummary(ticker).then((text) => {
+    void fetchCompanyEditorialSummaries(ticker).then(({ moatBody: m, howTheyMakeMoneyBody: h }) => {
       if (cancelled) return
-      setBody(text)
+      setMoatBody(m)
+      setHowTheyMakeMoneyBody(h)
       setReady(true)
     })
     return () => {
@@ -81,12 +87,27 @@ function MoatWhatsTheMoatSubsection({ ticker }: { ticker: string }) {
     }
   }, [ticker])
 
-  if (!ready || !body) return null
+  if (!ready) return null
+  if (!moatBody && !howTheyMakeMoneyBody) return null
+
+  const co = companyNameWithTicker(displayName, ticker)
 
   return (
-    <div>
-      <SubsectionLabel>What&apos;s the moat?</SubsectionLabel>
-      <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{body}</p>
+    <div className="space-y-8">
+      {moatBody ? (
+        <div>
+          <SubsectionLabel>What&apos;s the moat?</SubsectionLabel>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{moatBody}</p>
+        </div>
+      ) : null}
+      {howTheyMakeMoneyBody ? (
+        <div>
+          <SubsectionLabel sentenceCase>
+            How {co} makes money?
+          </SubsectionLabel>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{howTheyMakeMoneyBody}</p>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -136,7 +157,7 @@ export function MoatAnalysisSection({
             {takeaway.secondary ? <TakeawayBlock line={takeaway.secondary} /> : null}
           </div>
         </div>
-        <MoatWhatsTheMoatSubsection key={sym} ticker={sym} />
+        <MoatEditorialSubsections key={sym} displayName={analysis.displayName} ticker={analysis.ticker} />
       </div>
     )
   })()

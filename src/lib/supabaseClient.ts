@@ -22,10 +22,11 @@ export interface ScreenChartRow {
   updated_at: string
 }
 
-/** Row from `company_moat_summaries` (curated moat blurb on Home MOAT ANALYSIS). */
+/** Row from `company_moat_summaries` (curated moat + revenue narrative on Home MOAT ANALYSIS). */
 export interface CompanyMoatSummaryRow {
   symbol: string
   body: string
+  how_they_make_money_body?: string | null
   updated_at: string
 }
 
