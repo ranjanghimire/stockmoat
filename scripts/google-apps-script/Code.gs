@@ -43,7 +43,7 @@ function getGeminiKey_() {
 }
 
 function getGeminiModel_() {
-  return getProps_().getProperty('GEMINI_MODEL') || 'gemini-2.0-flash'
+  return getProps_().getProperty('GEMINI_MODEL') || 'gemini-2.5-flash'
 }
 
 function apiPost_(payload) {

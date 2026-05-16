@@ -45,7 +45,7 @@ In the spreadsheet: **Extensions → Apps Script →** gear icon **Project Setti
 | `MOAT_PIPELINE_API`     | `https://stockmoat.vercel.app` (no trailing slash)                        |
 | `MOAT_ADMIN_PASSPHRASE` | Same secret as Vercel `MOAT_ADMIN_PASSPHRASE`                             |
 | `GEMINI_API_KEY`        | Your Google AI Studio / Gemini API key                                    |
-| `GEMINI_MODEL`          | Optional. Default `gemini-2.0-flash`. You can try `gemini-1.5-flash` etc. |
+| `GEMINI_MODEL`          | Optional. Default `gemini-2.5-flash`. If Gemini returns **404 / model not available**, set this to `gemini-1.5-flash` (see [Gemini models](https://ai.google.dev/gemini-api/docs/models)). |
 
 
 **Never** put the Supabase service key in the sheet — only Vercel has that.
@@ -90,7 +90,8 @@ Inside `scheduledBiMonthlyPipeline`, the script checks **`LAST_MOAT_PIPELINE_RUN
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | `setValues` row count mismatch | The script’s `getRange` uses **numRows**, not last row index — use the latest `Code.gs` from this repo.                     |
 | Pull fails                     | `MOAT_PIPELINE_API`, passphrase, Vercel env `MOAT_ADMIN_PASSPHRASE` / `SUPABASE_*`                                           |
-| Gemini fails                   | `GEMINI_API_KEY`, quota, model name                                                                                         |
+| Gemini HTTP 404 (model)        | Set Script property `GEMINI_MODEL` to `gemini-1.5-flash` or another current model from Google AI Studio. Older defaults like `gemini-2.0-flash` may be blocked for new keys. |
+| Gemini fails (other)           | `GEMINI_API_KEY`, quota, wrong model id                                                                                    |
 | Push returns 400               | Server rejected text (too short, IR filler, blocklist). Read **Status** column message; fix prompt or row and re-run step 3 |
 | 6 min timeout                  | Run **2** on fewer rows (select a range) or increase `MAX_ROWS_PER_GENERATE_RUN` in small steps                            |
 
