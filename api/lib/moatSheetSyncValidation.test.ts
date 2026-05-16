@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateMoatSheetUpsert } from './moatSheetSyncValidation'
 
-describe('validateMoatSheetUpsert', () => {
+describe('validateMoatSheetUpsert (api bundle)', () => {
   it('accepts solid triple', () => {
     const r = validateMoatSheetUpsert({
       body:

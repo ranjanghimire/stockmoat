@@ -5,7 +5,8 @@ export const RECENT_DEALS_OVERRIDES: Record<string, string> = {
   NVDA: "NVIDIA (NVDA)'s recent deals center on locking in gigawatt-scale AI infrastructure: a landmark OpenAI deployment (10+ GW, large staged NVIDIA investment), Microsoft–NVIDIA support for Anthropic on Azure, and expanding ties with Adobe, Lilly, and Coherent for models, biopharma AI, and datacenter optics. IREN, Oracle, and HUMAIN add neocloud and sovereign AI capacity—cementing NVIDIA as the default compute layer for the next wave of training clusters and national AI programs.",
 }
 
-/** Legacy / model blurbs that tell users to “check IR” instead of saying anything concrete. */
+/** Legacy / model blurbs that tell users to “check IR” instead of saying anything concrete.
+ *  (Duplicated in `api/lib/moatSheetSyncValidation.ts` for Vercel — keep patterns aligned.) */
 export function isGenericRecentDealsFiller(text: string): boolean {
   const t = text.trim()
   if (t.length < 50) return false

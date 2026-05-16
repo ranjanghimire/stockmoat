@@ -1,4 +1,18 @@
-import { isGenericRecentDealsFiller } from './recentDealsOverrides'
+/**
+ * Server-side validation for sheet → Supabase moat upserts.
+ * Lives under `api/` so Vercel bundles it with `moat-sheet-pipeline` (no `src/` imports).
+ */
+
+/** Same rules as `src/lib/editorial/recentDealsOverrides.ts` — keep in sync when changing. */
+export function isGenericRecentDealsFiller(text: string): boolean {
+  const t = text.trim()
+  if (t.length < 50) return false
+  if (/\bbest tracked through investor relations\b/i.test(t)) return true
+  if (/\bthis automated summary highlights\b/i.test(t)) return true
+  if (/\bshould be refreshed periodically\b/i.test(t)) return true
+  if (/\bsec filings\b/i.test(t) && /\bautomated summary\b/i.test(t)) return true
+  return false
+}
 
 const BLOCKLIST: RegExp[] = [
   /\bas an ai language model\b/i,
@@ -25,10 +39,9 @@ export interface MoatSheetUpsertFields {
 
 const MAX_LEN = 12_000
 
-/**
- * Server-side checks before writing sheet-sourced Gemini output to `company_moat_summaries`.
- */
-export function validateMoatSheetUpsert(fields: MoatSheetUpsertFields): { ok: true } | { ok: false; reason: string } {
+export function validateMoatSheetUpsert(
+  fields: MoatSheetUpsertFields,
+): { ok: true } | { ok: false; reason: string } {
   const body = fields.body.trim()
   if (body.length < 80) {
     return { ok: false, reason: "What's the moat (body) is too short — likely incomplete or garbage." }

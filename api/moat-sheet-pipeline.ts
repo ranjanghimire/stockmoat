@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { validateMoatSheetUpsert } from '../src/lib/editorial/moatSheetSyncValidation'
+import { validateMoatSheetUpsert } from './lib/moatSheetSyncValidation'
 
 function cors(res: VercelResponse): void {
   res.setHeader('Access-Control-Allow-Origin', '*')
