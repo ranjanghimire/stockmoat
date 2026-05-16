@@ -10,11 +10,13 @@ The Vercel API lives in the repo at `api/moat-sheet-pipeline.ts` (same passphras
 
 ### Tab `Config` (exact name)
 
-|   | A            | B (your prompt templates — use `{{TICKER}}` where the symbol goes) |
-|---|--------------|---------------------------------------------------------------------|
-| 1 | prompt_moat  | *(paste your “what’s the moat” prompt)*                             |
-| 2 | prompt_how   | *(paste your “how they make money” prompt)*                         |
-| 3 | prompt_deals | *(paste your “recent deals & partnerships” prompt)*               |
+
+|     | A            | B (your prompt templates — use `{{TICKER}}` where the symbol goes) |
+| --- | ------------ | ------------------------------------------------------------------ |
+| 1   | prompt_moat  | *(paste your “what’s the moat” prompt)*                            |
+| 2   | prompt_how   | *(paste your “how they make money” prompt)*                        |
+| 3   | prompt_deals | *(paste your “recent deals & partnerships” prompt)*                |
+
 
 Example for deals (same idea you used with the extension):
 
@@ -22,9 +24,11 @@ Example for deals (same idea you used with the extension):
 
 ### Tab `MoatSync` (exact name)
 
-| A (Ticker) | B (Moat) | C (How they make money) | D (Recent deals) | E (Status) |
-|------------|----------|-------------------------|------------------|------------|
-| *(filled by script step 1)* | *(Gemini)* | *(Gemini)* | *(Gemini)* | *(script)* |
+
+| A (Ticker)                  | B (Moat)   | C (How they make money) | D (Recent deals) | E (Status) |
+| --------------------------- | ---------- | ----------------------- | ---------------- | ---------- |
+| *(filled by script step 1)* | *(Gemini)* | *(Gemini)*              | *(Gemini)*       | *(script)* |
+
 
 - Row **1** = headers (script writes data from **row 2** downward).
 - Do not put formulas in B–D; the script overwrites them.
@@ -35,12 +39,14 @@ Example for deals (same idea you used with the extension):
 
 In the spreadsheet: **Extensions → Apps Script →** gear icon **Project Settings → Script properties** (not cells):
 
-| Property                 | Example value |
-|--------------------------|----------------|
-| `MOAT_PIPELINE_API`      | `https://stockmoat.vercel.app` (no trailing slash) |
-| `MOAT_ADMIN_PASSPHRASE`  | Same secret as Vercel `MOAT_ADMIN_PASSPHRASE` |
-| `GEMINI_API_KEY`         | Your Google AI Studio / Gemini API key |
-| `GEMINI_MODEL`           | Optional. Default `gemini-2.0-flash`. You can try `gemini-1.5-flash` etc. |
+
+| Property                | Example value                                                             |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `MOAT_PIPELINE_API`     | `https://stockmoat.vercel.app` (no trailing slash)                        |
+| `MOAT_ADMIN_PASSPHRASE` | Same secret as Vercel `MOAT_ADMIN_PASSPHRASE`                             |
+| `GEMINI_API_KEY`        | Your Google AI Studio / Gemini API key                                    |
+| `GEMINI_MODEL`          | Optional. Default `gemini-2.0-flash`. You can try `gemini-1.5-flash` etc. |
+
 
 **Never** put the Supabase service key in the sheet — only Vercel has that.
 
@@ -79,13 +85,15 @@ Inside `scheduledBiMonthlyPipeline`, the script checks **`LAST_MOAT_PIPELINE_RUN
 
 ## 6. Troubleshooting
 
-| Symptom | What to check |
-|---------|----------------|
-| `setValues` row count mismatch | The script’s `getRange` uses **numRows**, not last row index — use the version from the latest `Code.gs` in this repo. |
-| Pull fails | `MOAT_PIPELINE_API`, passphrase, Vercel env `MOAT_ADMIN_PASSPHRASE` / `SUPABASE_*` |
-| Gemini fails | `GEMINI_API_KEY`, quota, model name |
-| Push returns 400 | Server rejected text (too short, IR filler, blocklist). Read **Status** column message; fix prompt or row and re-run step 3 |
-| 6 min timeout | Run **2** on fewer rows (select a range) or increase `MAX_ROWS_PER_GENERATE_RUN` in small steps |
+
+| Symptom                        | What to check                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `setValues` row count mismatch | The script’s `getRange` uses **numRows**, not last row index — use the latest `Code.gs` from this repo.                     |
+| Pull fails                     | `MOAT_PIPELINE_API`, passphrase, Vercel env `MOAT_ADMIN_PASSPHRASE` / `SUPABASE_*`                                           |
+| Gemini fails                   | `GEMINI_API_KEY`, quota, model name                                                                                         |
+| Push returns 400               | Server rejected text (too short, IR filler, blocklist). Read **Status** column message; fix prompt or row and re-run step 3 |
+| 6 min timeout                  | Run **2** on fewer rows (select a range) or increase `MAX_ROWS_PER_GENERATE_RUN` in small steps                            |
+
 
 ---
 
