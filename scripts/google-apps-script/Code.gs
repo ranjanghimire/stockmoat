@@ -161,13 +161,15 @@ function pullTickersFromDb() {
   var sh = getSyncSheet_()
   var last = sh.getLastRow()
   if (last >= 2) {
-    sh.getRange(2, 1, last, 5).clearContent()
+    // numRows = last - 1 so we clear rows 2 … last (not last+1 extra blank row)
+    sh.getRange(2, 1, last - 1, 5).clearContent()
   }
   if (list.length === 0) return
   var out = list.map(function (s) {
     return [s]
   })
-  sh.getRange(2, 1, 1 + list.length, 1).setValues(out)
+  // getRange(row, column, numRows, numColumns) — 3rd arg is ROW COUNT, not last row index
+  sh.getRange(2, 1, list.length, 1).setValues(out)
   notify_('Pulled ' + list.length + ' tickers into ' + SHEET_SYNC + '!A2:A')
 }
 

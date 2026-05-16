@@ -81,6 +81,7 @@ Inside `scheduledBiMonthlyPipeline`, the script checks **`LAST_MOAT_PIPELINE_RUN
 
 | Symptom | What to check |
 |---------|----------------|
+| `setValues` row count mismatch | The script’s `getRange` uses **numRows**, not last row index — use the version from the latest `Code.gs` in this repo. |
 | Pull fails | `MOAT_PIPELINE_API`, passphrase, Vercel env `MOAT_ADMIN_PASSPHRASE` / `SUPABASE_*` |
 | Gemini fails | `GEMINI_API_KEY`, quota, model name |
 | Push returns 400 | Server rejected text (too short, IR filler, blocklist). Read **Status** column message; fix prompt or row and re-run step 3 |
