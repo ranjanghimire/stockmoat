@@ -76,17 +76,40 @@ Reload the spreadsheet. You should see **MOAT sync** in the menu with:
 
 ---
 
-## 5. Bi-monthly unattended run
+## 5. Unattended sync (no manual steps)
 
-**Triggers** (clock icon in Apps Script):
+Use **one** time-driven trigger — you do **not** need many cron jobs.
 
-- **Add trigger** → function **`scheduledBiMonthlyPipeline`** → **Time-driven** → **Month timer** → **On day 1** (or your preference).
+**Setup** (Apps Script → Triggers → Add trigger):
 
-**Skip rule:** if `LAST_MOAT_PIPELINE_RUN` is set and fewer than **`MIN_DAYS_BETWEEN_RUNS`** days have passed since that timestamp, the function returns and does nothing.
+| Setting | Value |
+| -------- | ----- |
+| Function | **`scheduledMoatSyncContinue`** (or legacy **`scheduledBiMonthlyPipeline`** — same behavior) |
+| Event | Time-driven |
+| Type | **Hour timer** → **Every 6 hours** (recommended for ~3k tickers) or **Day timer** → **Every day** if runs are fast enough |
 
-**When the run “counts”:** after `runFullPipeline()`, the script sets `LAST_MOAT_PIPELINE_RUN` **only if** generation finished **without** hitting the time budget (no early stop). So a **partial** generate (stopped ~4.5 min in) **does not** move the clock forward — you avoid the failure mode where one partial run reset the 55‑day timer and blocked catch‑up for almost two more months.
+### How it works
 
-**Caveats:** The skip rule is still “≥ `MIN_DAYS` since **last recorded** success.” If your clock trigger fires **more often** than that (e.g. monthly) but the last **full** success was recent, the trigger may still skip until `MIN_DAYS` elapses; use manual **2**/**3** for extra batches, lower `MIN_DAYS_BETWEEN_RUNS`, or a less frequent trigger. If **`LAST_MOAT_PIPELINE_RUN` has never been set**, every trigger runs until one full generate completes—prefer **weekly/monthly**, not **daily**, unless you want that. Each invocation still **pushes** rows that reached `ready_to_sync`.
+1. **Between full cycles** (all tickers generated **and** pushed): script does nothing until **`MIN_DAYS_BETWEEN_RUNS`** (default 55) have passed since the last completed cycle.
+2. **Start new cycle:** pulls the full ticker list from the DB into the sheet (one-time wipe for that cycle only).
+3. **Each trigger fire while work remains:** generates Gemini text for as many **empty** rows as fit in ~4.5 minutes, then pushes up to **120** `ready_to_sync` rows to the DB. **Does not** re-pull or clear the sheet mid-cycle.
+4. **Cycle complete:** when no rows need generate or push, sets `LAST_MOAT_PIPELINE_RUN` and clears `MOAT_CYCLE_IN_PROGRESS`. Then rests until the next 55-day window.
+
+Progress is logged under **Executions** (no spreadsheet popups).
+
+### Sizing the trigger (~3000 tickers in ≤2 months)
+
+Each run typically completes about **8–15** tickers (3 Gemini calls each, ~6 min Apps Script cap).
+
+| Trigger | Runs in 60 days | Rough capacity |
+| -------- | ---------------- | ---------------- |
+| Every **6 hours** | ~240 | ~2k–3.6k tickers |
+| **Daily** | ~60 | ~500–900 tickers |
+| Every **2 days** | ~30 | ~250–450 tickers |
+
+For **~3000 symbols within 60 days**, use **every 6 hours** (or **every 4 hours** if your quota allows). Every 2 days alone is **not** enough for 3k names.
+
+You can tune `GEMINI_SLEEP_MS`, `GEMINI_GENERATION_BUDGET_MS`, and `SCHEDULED_MAX_ROWS_PUSH` in `Code.gs` if needed.
 
 ---
 

@@ -8,8 +8,13 @@
 var SHEET_SYNC = 'MoatSync'
 var SHEET_CONFIG = 'Config'
 var MIN_DAYS_BETWEEN_RUNS = 55
+/** Manual menu “generate” / full pipeline: cap rows per click. Scheduled runs use no cap (time budget only). */
 var MAX_ROWS_GENERATE = 30
 var MAX_ROWS_PUSH = 40
+/** Scheduled push per run (ready_to_sync rows). */
+var SCHEDULED_MAX_ROWS_PUSH = 120
+var PROP_CYCLE_IN_PROGRESS = 'MOAT_CYCLE_IN_PROGRESS'
+var PROP_CYCLE_COMPLETED = 'LAST_MOAT_PIPELINE_RUN'
 /** Pause between back-to-back Gemini calls (rate limit / quota). Override with script property GEMINI_SLEEP_MS (0–5000). */
 var GEMINI_SLEEP_MS = 400
 /** Stop generating before Google’s ~6 min hard limit so the run can exit cleanly. Override with GEMINI_GENERATION_BUDGET_MS (60000–330000). */
@@ -174,7 +179,8 @@ function callGemini_(userPrompt) {
   return text.replace(/\r\n/g, '\n').trim()
 }
 
-function pullTickersFromDb() {
+function pullTickersFromDb(silent) {
+  if (silent === undefined) silent = false
   var pass = getPass_()
   var r = apiPost_({ passphrase: pass, action: 'tickers' })
   if (r.code !== 200 || !r.json.tickers) {
@@ -213,7 +219,52 @@ function pullTickersFromDb() {
   }
   // getRange(row, column, numRows, numColumns) — 3rd arg is ROW COUNT, not last row index
   sh.getRange(2, 1, out.length, 6).setValues(out)
-  notify_('Pulled ' + list.length + ' tickers into ' + SHEET_SYNC + '!A2:F')
+  var msg = 'Pulled ' + list.length + ' tickers into ' + SHEET_SYNC + '!A2:F'
+  if (silent) Logger.log(msg)
+  else notify_(msg)
+}
+
+/** Rows needing Gemini (empty B or prior gemini_error). Optional cap for manual runs. */
+function rowsNeedingGenerate_(sh, maxRows) {
+  var last = sh.getLastRow()
+  if (last < 2) return []
+  var n = last - 1
+  var vals = sh.getRange(2, 1, n, 5).getValues()
+  var out = []
+  for (var i = 0; i < vals.length; i++) {
+    var t = (vals[i][0] || '').toString().trim()
+    var b = (vals[i][1] || '').toString().trim()
+    var st = (vals[i][4] || '').toString()
+    if (t && (!b || st.indexOf('gemini_error') >= 0)) {
+      out.push(i + 2)
+      if (maxRows != null && out.length >= maxRows) break
+    }
+  }
+  return out
+}
+
+/** @returns {{ generate: number, push: number }} */
+function countCyclePending_(sh) {
+  var last = sh.getLastRow()
+  if (last < 2) return { generate: 0, push: 0 }
+  var n = last - 1
+  var vals = sh.getRange(2, 1, n, 5).getValues()
+  var gen = 0
+  var push = 0
+  for (var i = 0; i < vals.length; i++) {
+    var t = (vals[i][0] || '').toString().trim()
+    if (!t) continue
+    var b = (vals[i][1] || '').toString().trim()
+    var st = (vals[i][4] || '').toString()
+    if (!b || st.indexOf('gemini_error') >= 0) gen++
+    else if (st === 'ready_to_sync') push++
+  }
+  return { generate: gen, push: push }
+}
+
+function cycleIsComplete_(sh) {
+  var p = countCyclePending_(sh)
+  return p.generate === 0 && p.push === 0
 }
 
 function rowNumbersToProcess_(sh) {
@@ -228,14 +279,7 @@ function rowNumbersToProcess_(sh) {
     }
     return rows
   }
-  var last = sh.getLastRow()
-  var out = []
-  for (var i = 2; i <= last && out.length < MAX_ROWS_GENERATE; i++) {
-    var t = (sh.getRange(i, 1).getValue() || '').toString().trim()
-    var b = (sh.getRange(i, 2).getValue() || '').toString().trim()
-    if (t && !b) out.push(i)
-  }
-  return out
+  return rowsNeedingGenerate_(sh, MAX_ROWS_GENERATE)
 }
 
 /**
@@ -298,13 +342,15 @@ function generateWithGeminiSelectedOrEmpty() {
   }
 }
 
-function pushValidatedToDb() {
+function pushValidatedToDb(silent, maxPush) {
+  if (silent === undefined) silent = false
+  if (maxPush === undefined) maxPush = MAX_ROWS_PUSH
   var pass = getPass_()
   var sh = getSyncSheet_()
   var last = sh.getLastRow()
   var ok = 0
   var fail = 0
-  for (var row = 2; row <= last && ok + fail < MAX_ROWS_PUSH; row++) {
+  for (var row = 2; row <= last && ok + fail < maxPush; row++) {
     var st = (sh.getRange(row, 5).getValue() || '').toString()
     if (st !== 'ready_to_sync') continue
     var ticker = (sh.getRange(row, 1).getValue() || '').toString().trim().toUpperCase()
@@ -329,7 +375,10 @@ function pushValidatedToDb() {
     }
     Utilities.sleep(300)
   }
-  notify_('Push done. OK=' + ok + ' failed=' + fail)
+  var msg = 'Push done. OK=' + ok + ' failed=' + fail
+  if (silent) Logger.log(msg)
+  else notify_(msg)
+  return { ok: ok, fail: fail }
 }
 
 function runFullPipeline() {
@@ -356,22 +405,65 @@ function runFullPipeline() {
 }
 
 /**
- * Time-driven trigger target — skips if LAST_MOAT_PIPELINE_RUN is within MIN_DAYS_BETWEEN_RUNS.
- * On a partial generate (time budget), LAST_MOAT_PIPELINE_RUN is not updated so the 55-day clock
- * is not reset from “today”; the next fire still follows the last full completion date.
+ * Unattended sync: one time-driven trigger calls this repeatedly until the sheet is done, then rests
+ * until MIN_DAYS_BETWEEN_RUNS before starting a new pull+cycle. Does not wipe the sheet mid-cycle.
  */
-function scheduledBiMonthlyPipeline() {
-  var last = getProps_().getProperty('LAST_MOAT_PIPELINE_RUN')
-  if (last) {
-    var prev = new Date(last).getTime()
-    if (Date.now() - prev < MIN_DAYS_BETWEEN_RUNS * 24 * 60 * 60 * 1000) {
-      return
+function scheduledMoatSyncContinue() {
+  var props = getProps_()
+  var inProgress = props.getProperty(PROP_CYCLE_IN_PROGRESS) === 'true'
+  var completedAt = props.getProperty(PROP_CYCLE_COMPLETED)
+
+  if (!inProgress) {
+    if (completedAt) {
+      var prev = new Date(completedAt).getTime()
+      if (Date.now() - prev < MIN_DAYS_BETWEEN_RUNS * 24 * 60 * 60 * 1000) {
+        Logger.log('MOAT sync idle — last full cycle completed ' + completedAt)
+        return
+      }
     }
+    pullTickersFromDb(true)
+    props.setProperty(PROP_CYCLE_IN_PROGRESS, 'true')
+    Logger.log('MOAT sync started new cycle (pulled tickers)')
   }
-  var stoppedEarly = runFullPipeline()
-  if (!stoppedEarly) {
-    getProps_().setProperty('LAST_MOAT_PIPELINE_RUN', new Date().toISOString())
+
+  var sh = getSyncSheet_()
+  var prompts = loadPrompts_()
+  var rows = rowsNeedingGenerate_(sh, null)
+  var gen = { ok: 0, stoppedEarly: false }
+  if (rows.length > 0) {
+    gen = generateGeminiForRows_(sh, prompts, rows)
   }
+  var push = pushValidatedToDb(true, SCHEDULED_MAX_ROWS_PUSH)
+  var pending = countCyclePending_(sh)
+
+  if (cycleIsComplete_(sh)) {
+    props.deleteProperty(PROP_CYCLE_IN_PROGRESS)
+    props.setProperty(PROP_CYCLE_COMPLETED, new Date().toISOString())
+    Logger.log(
+      'MOAT sync cycle complete. Last generate batch: ' +
+        gen.ok +
+        ' row(s). Push OK=' +
+        push.ok +
+        ' fail=' +
+        push.fail,
+    )
+  } else {
+    Logger.log(
+      'MOAT sync in progress — generated ' +
+        gen.ok +
+        ' this run' +
+        (gen.stoppedEarly ? ' (time budget)' : '') +
+        '; pending generate=' +
+        pending.generate +
+        ', pending push=' +
+        pending.push,
+    )
+  }
+}
+
+/** @deprecated Use scheduledMoatSyncContinue — kept so existing triggers keep working. */
+function scheduledBiMonthlyPipeline() {
+  scheduledMoatSyncContinue()
 }
 
 function onOpen() {
