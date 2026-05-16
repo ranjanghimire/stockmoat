@@ -352,9 +352,14 @@ function runFullPipeline() {
     )
   }
   pushValidatedToDb()
+  return gen.stoppedEarly
 }
 
-/** Time-driven trigger target — skips if last run was within MIN_DAYS_BETWEEN_RUNS. */
+/**
+ * Time-driven trigger target — skips if LAST_MOAT_PIPELINE_RUN is within MIN_DAYS_BETWEEN_RUNS.
+ * On a partial generate (time budget), LAST_MOAT_PIPELINE_RUN is not updated so the 55-day clock
+ * is not reset from “today”; the next fire still follows the last full completion date.
+ */
 function scheduledBiMonthlyPipeline() {
   var last = getProps_().getProperty('LAST_MOAT_PIPELINE_RUN')
   if (last) {
@@ -363,8 +368,10 @@ function scheduledBiMonthlyPipeline() {
       return
     }
   }
-  runFullPipeline()
-  getProps_().setProperty('LAST_MOAT_PIPELINE_RUN', new Date().toISOString())
+  var stoppedEarly = runFullPipeline()
+  if (!stoppedEarly) {
+    getProps_().setProperty('LAST_MOAT_PIPELINE_RUN', new Date().toISOString())
+  }
 }
 
 function onOpen() {

@@ -82,7 +82,11 @@ Reload the spreadsheet. You should see **MOAT sync** in the menu with:
 
 - **Add trigger** → function **`scheduledBiMonthlyPipeline`** → **Time-driven** → **Month timer** → **On day 1** (or your preference).
 
-Inside `scheduledBiMonthlyPipeline`, the script checks **`LAST_MOAT_PIPELINE_RUN`** (stored automatically in Script Properties). It only runs the heavy pipeline if **≥ 55 days** have passed since the last successful run. Adjust `MIN_DAYS_BETWEEN_RUNS` in `Code.gs` if you want stricter “every 2 months”.
+**Skip rule:** if `LAST_MOAT_PIPELINE_RUN` is set and fewer than **`MIN_DAYS_BETWEEN_RUNS`** days have passed since that timestamp, the function returns and does nothing.
+
+**When the run “counts”:** after `runFullPipeline()`, the script sets `LAST_MOAT_PIPELINE_RUN` **only if** generation finished **without** hitting the time budget (no early stop). So a **partial** generate (stopped ~4.5 min in) **does not** move the clock forward — you avoid the failure mode where one partial run reset the 55‑day timer and blocked catch‑up for almost two more months.
+
+**Caveats:** The skip rule is still “≥ `MIN_DAYS` since **last recorded** success.” If your clock trigger fires **more often** than that (e.g. monthly) but the last **full** success was recent, the trigger may still skip until `MIN_DAYS` elapses; use manual **2**/**3** for extra batches, lower `MIN_DAYS_BETWEEN_RUNS`, or a less frequent trigger. If **`LAST_MOAT_PIPELINE_RUN` has never been set**, every trigger runs until one full generate completes—prefer **weekly/monthly**, not **daily**, unless you want that. Each invocation still **pushes** rows that reached `ready_to_sync`.
 
 ---
 
