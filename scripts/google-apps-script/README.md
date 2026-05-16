@@ -88,7 +88,7 @@ Inside `scheduledBiMonthlyPipeline`, the script checks **`LAST_MOAT_PIPELINE_RUN
 
 | Symptom                        | What to check                                                                                                                |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `setValues` row count mismatch | The script’s `getRange` uses **numRows**, not last row index — use the latest `Code.gs` from this repo.                     |
+| `setValues` row/column mismatch | `getRange` uses **numRows** and **numColumns** (not bottom-right cell). Pull uses `getRange(2,1,list.length,1)`; Gemini output uses `getRange(row,2,1,3)` for one row across B–D. |
 | Pull fails                     | `MOAT_PIPELINE_API`, passphrase, Vercel env `MOAT_ADMIN_PASSPHRASE` / `SUPABASE_*`                                           |
 | Gemini HTTP 404 (model)        | Set Script property `GEMINI_MODEL` to `gemini-1.5-flash` or another current model from Google AI Studio. Older defaults like `gemini-2.0-flash` may be blocked for new keys. |
 | Gemini fails (other)           | `GEMINI_API_KEY`, quota, wrong model id                                                                                    |

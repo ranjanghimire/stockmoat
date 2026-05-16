@@ -219,7 +219,8 @@ function generateWithGeminiSelectedOrEmpty() {
       var t2 = callGemini_(p2)
       Utilities.sleep(GEMINI_SLEEP_MS)
       var t3 = callGemini_(p3)
-      sh.getRange(row, 2, row, 4).setValues([[t1, t2, t3]])
+      // 1 row × 3 cols (B–D): args are (row, col, numRows, numColumns), not corner cells
+      sh.getRange(row, 2, 1, 3).setValues([[t1, t2, t3]])
       sh.getRange(row, 5).setValue('ready_to_sync')
       n++
     } catch (e) {
@@ -286,7 +287,8 @@ function runFullPipeline() {
       var t2 = callGemini_(substitute_(prompts.how, ticker))
       Utilities.sleep(GEMINI_SLEEP_MS)
       var t3 = callGemini_(substitute_(prompts.deals, ticker))
-      sh.getRange(row, 2, row, 4).setValues([[t1, t2, t3]])
+      // 1 row × 3 cols (B–D): args are (row, col, numRows, numColumns), not corner cells
+      sh.getRange(row, 2, 1, 3).setValues([[t1, t2, t3]])
       sh.getRange(row, 5).setValue('ready_to_sync')
     } catch (e) {
       sh.getRange(row, 5).setValue('gemini_error: ' + (e.message || String(e)).slice(0, 200))
