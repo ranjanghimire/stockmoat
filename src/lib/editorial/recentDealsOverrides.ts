@@ -6,7 +6,7 @@ export const RECENT_DEALS_OVERRIDES: Record<string, string> = {
 }
 
 /** Legacy / model blurbs that tell users to “check IR” instead of saying anything concrete.
- *  (Duplicated in `api/lib/moatSheetSyncValidation.ts` for Vercel — keep patterns aligned.) */
+ *  (Same patterns duplicated in `api/moat-sheet-pipeline.ts` for Vercel — keep aligned.) */
 export function isGenericRecentDealsFiller(text: string): boolean {
   const t = text.trim()
   if (t.length < 50) return false
