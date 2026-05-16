@@ -129,6 +129,42 @@ async function fetchTickerUnion(sb: ReturnType<typeof createClient>): Promise<st
   return [...out].sort()
 }
 
+function chunkSymbols(symbols: string[], size: number): string[][] {
+  const out: string[][] = []
+  for (let i = 0; i < symbols.length; i += size) out.push(symbols.slice(i, i + size))
+  return out
+}
+
+async function fetchDisplayNameMap(
+  sb: ReturnType<typeof createClient>,
+  symbols: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  const uniq = [...new Set(symbols.filter(Boolean))]
+  for (const group of chunkSymbols(uniq, 100)) {
+    if (group.length === 0) continue
+    const { data, error } = await sb.from('screen_scores').select('symbol, display_name').in('symbol', group)
+    if (error) throw new Error(`screen_scores: ${error.message}`)
+    for (const r of data ?? []) {
+      const sym = typeof r.symbol === 'string' ? r.symbol.trim().toUpperCase() : ''
+      const dn = typeof r.display_name === 'string' ? r.display_name.trim() : ''
+      if (sym && dn) map.set(sym, dn)
+    }
+  }
+  return map
+}
+
+export interface TickerEntry {
+  symbol: string
+  displayName: string | null
+}
+
+async function fetchTickerEntries(sb: ReturnType<typeof createClient>): Promise<TickerEntry[]> {
+  const symbols = await fetchTickerUnion(sb)
+  const nameMap = await fetchDisplayNameMap(sb, symbols)
+  return symbols.map((symbol) => ({ symbol, displayName: nameMap.get(symbol) ?? null }))
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   cors(res)
 
@@ -169,8 +205,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   if (action === 'tickers') {
     try {
-      const tickers = await fetchTickerUnion(sb)
-      res.status(200).json({ ok: true, count: tickers.length, tickers })
+      const entries = await fetchTickerEntries(sb)
+      const tickers = entries.map((e) => e.symbol)
+      res.status(200).json({ ok: true, count: entries.length, tickers, entries })
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
     }

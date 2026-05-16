@@ -11,27 +11,28 @@ The Vercel API lives in the repo at `api/moat-sheet-pipeline.ts` (same passphras
 ### Tab `Config` (exact name)
 
 
-|     | A            | B (your prompt templates — use `{{TICKER}}` where the symbol goes) |
-| --- | ------------ | ------------------------------------------------------------------ |
-| 1   | prompt_moat  | *(paste your “what’s the moat” prompt)*                            |
-| 2   | prompt_how   | *(paste your “how they make money” prompt)*                        |
-| 3   | prompt_deals | *(paste your “recent deals & partnerships” prompt)*                |
+|     | A            | B (prompt templates — use `{{TICKER}}` and `{{COMPANY_NAME}}`) |
+| --- | ------------ | ---------------------------------------------------------------- |
+| 1   | prompt_moat  | *(paste your “what’s the moat” prompt)*                          |
+| 2   | prompt_how   | *(paste your “how they make money” prompt)*                      |
+| 3   | prompt_deals | *(paste your “recent deals & partnerships” prompt)*              |
 
+**Why two placeholders:** Short symbols like `AA` are ambiguous to the model (American Airlines, Alcoholics Anonymous, etc.). After **Pull tickers**, column **F** is filled from the DB (`screen_scores.display_name`) when available. Your prompts should name the issuer explicitly, e.g. “the **listed** company **{{COMPANY_NAME}}** (ticker **{{TICKER}}**)” and ask the model to ignore homonyms and non‑public entities.
 
-Example for deals (same idea you used with the extension):
+Example for deals:
 
-> Give me a meaningful-only recent deals & partnerships summary for ticker **{{TICKER}}** — short, precise, factual, and only if the partnership is truly material. If nothing meaningful exists, say so plainly. One paragraph, no bullets.
+> For the **listed public company** **{{COMPANY_NAME}}** (ticker **{{TICKER}}**), give a meaningful-only recent deals & partnerships summary — short, precise, factual, and only if the partnership is truly material. If nothing meaningful exists, say so plainly. One paragraph, no bullets. If **{{COMPANY_NAME}}** is empty, use **{{TICKER}}** as the NYSE/Nasdaq symbol only and do not substitute unrelated “AA” meanings.
 
 ### Tab `MoatSync` (exact name)
 
 
-| A (Ticker)                  | B (Moat)   | C (How they make money) | D (Recent deals) | E (Status) |
-| --------------------------- | ---------- | ----------------------- | ---------------- | ---------- |
-| *(filled by script step 1)* | *(Gemini)* | *(Gemini)*              | *(Gemini)*       | *(script)* |
+| A (Ticker)                  | B (Moat)   | C (How they make money) | D (Recent deals) | E (Status) | F (Company from DB) |
+| --------------------------- | ---------- | ----------------------- | ---------------- | ---------- | ------------------- |
+| *(pull step 1)*             | *(Gemini)* | *(Gemini)*              | *(Gemini)*       | *(script)* | *(pull: display name when known)* |
 
 
-- Row **1** = headers (script writes data from **row 2** downward).
-- Do not put formulas in B–D; the script overwrites them.
+- Row **1** = headers (script sets **F1** to `Company (DB)` if it was blank). Data starts at **row 2**.
+- Do not put formulas in B–D; the script overwrites them. You may **edit F** manually (e.g. if a symbol has no DB name yet) before running Generate.
 
 ---
 
@@ -66,7 +67,7 @@ In the spreadsheet: **Extensions → Apps Script →** gear icon **Project Setti
 
 Reload the spreadsheet. You should see **MOAT sync** in the menu with:
 
-- **1 Pull tickers from DB** — fills column A from `screen_scores ∪ ticker_fmp_home_cache ∪ company_moat_summaries`
+- **1 Pull tickers from DB** — fills **A** (symbols) and **F** (display name from `screen_scores` when present) from `screen_scores ∪ ticker_fmp_home_cache ∪ company_moat_summaries`
 - **2 Generate with Gemini (selected rows)** — uses `Config` prompts; fill column A first (or pull). If nothing selected, processes rows where A is non-empty and B is empty (up to 30 rows per run).
 - **3 Push validated rows to DB** — POSTs rows where B,C,D look filled and pass server validation (up to 40 rows per run).
 - **Run full pipeline (pull → generate → push)** — runs all three with small pauses (long; may hit the 6-minute limit for huge universes — run 2 in batches if needed).
@@ -93,7 +94,8 @@ Inside `scheduledBiMonthlyPipeline`, the script checks **`LAST_MOAT_PIPELINE_RUN
 | Gemini HTTP 404 (model)        | Set Script property `GEMINI_MODEL` to `gemini-1.5-flash` or another current model from Google AI Studio. Older defaults like `gemini-2.0-flash` may be blocked for new keys. |
 | Gemini fails (other)           | `GEMINI_API_KEY`, quota, wrong model id                                                                                    |
 | Push returns 400               | Server rejected text (too short, IR filler, blocklist). Read **Status** column message; fix prompt or row and re-run step 3 |
-| 6 min timeout                  | Run **2** on fewer rows (select a range) or increase `MAX_ROWS_PER_GENERATE_RUN` in small steps                            |
+| Wrong company (e.g. `AA`)      | Use **`{{COMPANY_NAME}}`** in all three prompts; confirm **F** matches the issuer you want; redeploy API so `tickers` returns `entries` with display names |
+| 6 min timeout                  | Run **2** on fewer rows (select a range) or raise `MAX_ROWS_GENERATE` in `Code.gs` in small steps                          |
 
 
 ---

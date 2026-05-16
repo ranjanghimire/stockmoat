@@ -2,7 +2,7 @@
  * StockMoat — MoatSync pipeline (Google Sheets + Gemini + Vercel API)
  *
  * Setup: see scripts/google-apps-script/README.md
- * Tabs required: "Config" (prompts in B1:B3), "MoatSync" (data from row 2, columns A–E)
+ * Tabs required: "Config" (prompts in B1:B3), "MoatSync" (data from row 2, columns A–F; F = company name from DB for disambiguation)
  */
 
 var SHEET_SYNC = 'MoatSync'
@@ -114,13 +114,15 @@ function loadPrompts_() {
   var how = (c.getRange('B2').getValue() || '').toString().trim()
   var deals = (c.getRange('B3').getValue() || '').toString().trim()
   if (!moat || !how || !deals) {
-    throw new Error('Config!B1:B3 must all contain prompt templates (with {{TICKER}}).')
+    throw new Error('Config!B1:B3 must all contain prompt templates (use {{TICKER}}; add {{COMPANY_NAME}} when column F is filled).')
   }
   return { moat: moat, how: how, deals: deals }
 }
 
-function substitute_(template, ticker) {
-  return template.split('{{TICKER}}').join(ticker)
+function substitute_(template, ticker, companyName) {
+  var t = template.split('{{TICKER}}').join(ticker)
+  var c = companyName ? String(companyName) : ''
+  return t.split('{{COMPANY_NAME}}').join(c)
 }
 
 function callGemini_(userPrompt) {
@@ -158,19 +160,39 @@ function pullTickersFromDb() {
     throw new Error('tickers failed: ' + r.code + ' ' + JSON.stringify(r.json))
   }
   var list = r.json.tickers
+  var entries = Array.isArray(r.json.entries)
+    ? r.json.entries
+    : list.map(function (s) {
+        return { symbol: s, displayName: null }
+      })
   var sh = getSyncSheet_()
+  var h1 = (sh.getRange(1, 6).getValue() || '').toString().trim()
+  if (!h1) {
+    sh.getRange(1, 6).setValue('Company (DB)')
+  }
   var last = sh.getLastRow()
   if (last >= 2) {
     // numRows = last - 1 so we clear rows 2 … last (not last+1 extra blank row)
-    sh.getRange(2, 1, last - 1, 5).clearContent()
+    sh.getRange(2, 1, last - 1, 6).clearContent()
   }
   if (list.length === 0) return
-  var out = list.map(function (s) {
-    return [s]
-  })
+  var nameBySymbol = {}
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i]
+    if (e && e.symbol) {
+      nameBySymbol[String(e.symbol).toUpperCase()] = e.displayName ? String(e.displayName) : ''
+    }
+  }
+  var out = []
+  for (var j = 0; j < list.length; j++) {
+    var sym = String(list[j]).toUpperCase()
+    var dn = nameBySymbol[sym] || ''
+    // A=ticker, B–D left blank for Gemini, E status, F=display name from screen_scores when present
+    out.push([sym, '', '', '', '', dn])
+  }
   // getRange(row, column, numRows, numColumns) — 3rd arg is ROW COUNT, not last row index
-  sh.getRange(2, 1, list.length, 1).setValues(out)
-  notify_('Pulled ' + list.length + ' tickers into ' + SHEET_SYNC + '!A2:A')
+  sh.getRange(2, 1, out.length, 6).setValues(out)
+  notify_('Pulled ' + list.length + ' tickers into ' + SHEET_SYNC + '!A2:F')
 }
 
 function rowNumbersToProcess_(sh) {
@@ -208,12 +230,13 @@ function generateWithGeminiSelectedOrEmpty() {
     var row = rows[k]
     var ticker = (sh.getRange(row, 1).getValue() || '').toString().trim().toUpperCase()
     if (!ticker) continue
+    var company = (sh.getRange(row, 6).getValue() || '').toString().trim()
     sh.getRange(row, 5).setValue('generating…')
     SpreadsheetApp.flush()
     try {
-      var p1 = substitute_(prompts.moat, ticker)
-      var p2 = substitute_(prompts.how, ticker)
-      var p3 = substitute_(prompts.deals, ticker)
+      var p1 = substitute_(prompts.moat, ticker, company)
+      var p2 = substitute_(prompts.how, ticker, company)
+      var p3 = substitute_(prompts.deals, ticker, company)
       var t1 = callGemini_(p1)
       Utilities.sleep(GEMINI_SLEEP_MS)
       var t2 = callGemini_(p2)
@@ -279,14 +302,15 @@ function runFullPipeline() {
   for (var k = 0; k < rows.length; k++) {
     var row = rows[k]
     var ticker = (sh.getRange(row, 1).getValue() || '').toString().trim().toUpperCase()
+    var company = (sh.getRange(row, 6).getValue() || '').toString().trim()
     sh.getRange(row, 5).setValue('generating…')
     SpreadsheetApp.flush()
     try {
-      var t1 = callGemini_(substitute_(prompts.moat, ticker))
+      var t1 = callGemini_(substitute_(prompts.moat, ticker, company))
       Utilities.sleep(GEMINI_SLEEP_MS)
-      var t2 = callGemini_(substitute_(prompts.how, ticker))
+      var t2 = callGemini_(substitute_(prompts.how, ticker, company))
       Utilities.sleep(GEMINI_SLEEP_MS)
-      var t3 = callGemini_(substitute_(prompts.deals, ticker))
+      var t3 = callGemini_(substitute_(prompts.deals, ticker, company))
       // 1 row × 3 cols (B–D): args are (row, col, numRows, numColumns), not corner cells
       sh.getRange(row, 2, 1, 3).setValues([[t1, t2, t3]])
       sh.getRange(row, 5).setValue('ready_to_sync')
