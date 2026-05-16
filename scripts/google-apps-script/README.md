@@ -47,6 +47,8 @@ In the spreadsheet: **Extensions → Apps Script →** gear icon **Project Setti
 | `MOAT_ADMIN_PASSPHRASE` | Same secret as Vercel `MOAT_ADMIN_PASSPHRASE`                             |
 | `GEMINI_API_KEY`        | Your Google AI Studio / Gemini API key                                    |
 | `GEMINI_MODEL`          | Optional. Default `gemini-2.5-flash`. If Gemini returns **404 / model not available**, set this to `gemini-1.5-flash` (see [Gemini models](https://ai.google.dev/gemini-api/docs/models)). |
+| `GEMINI_SLEEP_MS`       | Optional. Milliseconds between sequential Gemini calls (default **400**). Increase (e.g. `800`) if you hit rate limits; decrease only if you stay under quota. |
+| `GEMINI_GENERATION_BUDGET_MS` | Optional. Stop starting new rows after this many ms (default **270000** ≈ 4.5 min) so the script exits before Google’s **~6 minute** hard limit. Increase up to **330000** only if runs stay fast. |
 
 
 **Never** put the Supabase service key in the sheet — only Vercel has that.
@@ -68,7 +70,7 @@ In the spreadsheet: **Extensions → Apps Script →** gear icon **Project Setti
 Reload the spreadsheet. You should see **MOAT sync** in the menu with:
 
 - **1 Pull tickers from DB** — fills **A** (symbols) and **F** (display name from `screen_scores` when present) from `screen_scores ∪ ticker_fmp_home_cache ∪ company_moat_summaries`
-- **2 Generate with Gemini (selected rows)** — uses `Config` prompts; fill column A first (or pull). If nothing selected, processes rows where A is non-empty and B is empty (up to 30 rows per run).
+- **2 Generate with Gemini (selected rows)** — uses `Config` prompts; fill column A first (or pull). If nothing selected, processes rows where A is non-empty and B is empty (up to 30 rows per run). Long runs stop **before** Google’s ~6 minute limit when needed; run **2** again on the rest.
 - **3 Push validated rows to DB** — POSTs rows where B,C,D look filled and pass server validation (up to 40 rows per run).
 - **Run full pipeline (pull → generate → push)** — runs all three with small pauses (long; may hit the 6-minute limit for huge universes — run 2 in batches if needed).
 
@@ -89,13 +91,13 @@ Inside `scheduledBiMonthlyPipeline`, the script checks **`LAST_MOAT_PIPELINE_RUN
 
 | Symptom                        | What to check                                                                                                                |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `setValues` row/column mismatch | `getRange` uses **numRows** and **numColumns** (not bottom-right cell). Pull uses `getRange(2,1,list.length,1)`; Gemini output uses `getRange(row,2,1,3)` for one row across B–D. |
+| `setValues` row/column mismatch | `getRange` uses **numRows** and **numColumns** (not bottom-right cell). Pull uses `getRange(2,1,out.length,6)`; Gemini output uses `getRange(row,2,1,3)` for one row across B–D. |
 | Pull fails                     | `MOAT_PIPELINE_API`, passphrase, Vercel env `MOAT_ADMIN_PASSPHRASE` / `SUPABASE_*`                                           |
 | Gemini HTTP 404 (model)        | Set Script property `GEMINI_MODEL` to `gemini-1.5-flash` or another current model from Google AI Studio. Older defaults like `gemini-2.0-flash` may be blocked for new keys. |
 | Gemini fails (other)           | `GEMINI_API_KEY`, quota, wrong model id                                                                                    |
 | Push returns 400               | Server rejected text (too short, IR filler, blocklist). Read **Status** column message; fix prompt or row and re-run step 3 |
 | Wrong company (e.g. `AA`)      | Use **`{{COMPANY_NAME}}`** in all three prompts; confirm **F** matches the issuer you want; redeploy API so `tickers` returns `entries` with display names |
-| 6 min timeout                  | Run **2** on fewer rows (select a range) or raise `MAX_ROWS_GENERATE` in `Code.gs` in small steps                          |
+| **Exceeded maximum execution time** | Google caps one run at **~6 minutes**. The script uses a **time budget** and stops partway through large batches so you can run **2** again on the rest. Select fewer rows per run if you prefer one shot; tune `GEMINI_SLEEP_MS` / `GEMINI_GENERATION_BUDGET_MS` in Script properties. |
 
 
 ---

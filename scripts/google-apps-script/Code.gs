@@ -10,7 +10,10 @@ var SHEET_CONFIG = 'Config'
 var MIN_DAYS_BETWEEN_RUNS = 55
 var MAX_ROWS_GENERATE = 30
 var MAX_ROWS_PUSH = 40
-var GEMINI_SLEEP_MS = 1200
+/** Pause between back-to-back Gemini calls (rate limit / quota). Override with script property GEMINI_SLEEP_MS (0–5000). */
+var GEMINI_SLEEP_MS = 400
+/** Stop generating before Google’s ~6 min hard limit so the run can exit cleanly. Override with GEMINI_GENERATION_BUDGET_MS (60000–330000). */
+var GENERATION_BUDGET_MS = 270000
 
 function notify_(msg) {
   try {
@@ -44,6 +47,24 @@ function getGeminiKey_() {
 
 function getGeminiModel_() {
   return getProps_().getProperty('GEMINI_MODEL') || 'gemini-2.5-flash'
+}
+
+function getGeminiSleepMs_() {
+  var raw = getProps_().getProperty('GEMINI_SLEEP_MS')
+  if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+    var n = parseInt(String(raw), 10)
+    if (!isNaN(n) && n >= 0 && n <= 5000) return n
+  }
+  return GEMINI_SLEEP_MS
+}
+
+function getGenerationBudgetMs_() {
+  var raw = getProps_().getProperty('GEMINI_GENERATION_BUDGET_MS')
+  if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+    var n = parseInt(String(raw), 10)
+    if (!isNaN(n) && n >= 60000 && n <= 330000) return n
+  }
+  return GENERATION_BUDGET_MS
 }
 
 function apiPost_(payload) {
@@ -139,7 +160,7 @@ function callGemini_(userPrompt) {
     muteHttpExceptions: true,
     payload: JSON.stringify({
       contents: [{ parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.35, maxOutputTokens: 2048 },
+      generationConfig: { temperature: 0.35, maxOutputTokens: 1024 },
     }),
   })
   if (res.getResponseCode() !== 200) {
@@ -217,16 +238,19 @@ function rowNumbersToProcess_(sh) {
   return out
 }
 
-function generateWithGeminiSelectedOrEmpty() {
-  var prompts = loadPrompts_()
-  var sh = getSyncSheet_()
-  var rows = rowNumbersToProcess_(sh)
-  if (rows.length === 0) {
-    notify_('No rows to generate (need ticker in A and empty B, or select rows on MoatSync).')
-    return
-  }
+/**
+ * Runs Gemini for each row in rows (row numbers). Stops before Apps Script’s ~6 min limit when budget exceeded.
+ * @returns {{ ok: number, stoppedEarly: boolean }}
+ */
+function generateGeminiForRows_(sh, prompts, rows) {
+  var sleepMs = getGeminiSleepMs_()
+  var budgetMs = getGenerationBudgetMs_()
+  var t0 = Date.now()
   var n = 0
   for (var k = 0; k < rows.length; k++) {
+    if (Date.now() - t0 > budgetMs) {
+      return { ok: n, stoppedEarly: true }
+    }
     var row = rows[k]
     var ticker = (sh.getRange(row, 1).getValue() || '').toString().trim().toUpperCase()
     if (!ticker) continue
@@ -238,9 +262,9 @@ function generateWithGeminiSelectedOrEmpty() {
       var p2 = substitute_(prompts.how, ticker, company)
       var p3 = substitute_(prompts.deals, ticker, company)
       var t1 = callGemini_(p1)
-      Utilities.sleep(GEMINI_SLEEP_MS)
+      Utilities.sleep(sleepMs)
       var t2 = callGemini_(p2)
-      Utilities.sleep(GEMINI_SLEEP_MS)
+      Utilities.sleep(sleepMs)
       var t3 = callGemini_(p3)
       // 1 row × 3 cols (B–D): args are (row, col, numRows, numColumns), not corner cells
       sh.getRange(row, 2, 1, 3).setValues([[t1, t2, t3]])
@@ -249,9 +273,29 @@ function generateWithGeminiSelectedOrEmpty() {
     } catch (e) {
       sh.getRange(row, 5).setValue('gemini_error: ' + (e.message || String(e)).slice(0, 200))
     }
-    Utilities.sleep(GEMINI_SLEEP_MS)
+    Utilities.sleep(sleepMs)
   }
-  notify_('Gemini finished for ' + n + ' row(s).')
+  return { ok: n, stoppedEarly: false }
+}
+
+function generateWithGeminiSelectedOrEmpty() {
+  var prompts = loadPrompts_()
+  var sh = getSyncSheet_()
+  var rows = rowNumbersToProcess_(sh)
+  if (rows.length === 0) {
+    notify_('No rows to generate (need ticker in A and empty B, or select rows on MoatSync).')
+    return
+  }
+  var r = generateGeminiForRows_(sh, prompts, rows)
+  if (r.stoppedEarly) {
+    notify_(
+      'Generated ' +
+        r.ok +
+        ' row(s), then stopped to stay under Google’s ~6 minute script limit. Run **2** again on the rest (rows with empty B, or select a range).',
+    )
+  } else {
+    notify_('Gemini finished for ' + r.ok + ' row(s).')
+  }
 }
 
 function pushValidatedToDb() {
@@ -299,25 +343,13 @@ function runFullPipeline() {
     if (t) rows.push(i)
   }
   var prompts = loadPrompts_()
-  for (var k = 0; k < rows.length; k++) {
-    var row = rows[k]
-    var ticker = (sh.getRange(row, 1).getValue() || '').toString().trim().toUpperCase()
-    var company = (sh.getRange(row, 6).getValue() || '').toString().trim()
-    sh.getRange(row, 5).setValue('generating…')
-    SpreadsheetApp.flush()
-    try {
-      var t1 = callGemini_(substitute_(prompts.moat, ticker, company))
-      Utilities.sleep(GEMINI_SLEEP_MS)
-      var t2 = callGemini_(substitute_(prompts.how, ticker, company))
-      Utilities.sleep(GEMINI_SLEEP_MS)
-      var t3 = callGemini_(substitute_(prompts.deals, ticker, company))
-      // 1 row × 3 cols (B–D): args are (row, col, numRows, numColumns), not corner cells
-      sh.getRange(row, 2, 1, 3).setValues([[t1, t2, t3]])
-      sh.getRange(row, 5).setValue('ready_to_sync')
-    } catch (e) {
-      sh.getRange(row, 5).setValue('gemini_error: ' + (e.message || String(e)).slice(0, 200))
-    }
-    Utilities.sleep(GEMINI_SLEEP_MS)
+  var gen = generateGeminiForRows_(sh, prompts, rows)
+  if (gen.stoppedEarly) {
+    notify_(
+      'Full pipeline: generated ' +
+        gen.ok +
+        ' row(s) then paused (6 min Apps Script limit). Run **2** on remaining rows, then **3**, or run full pipeline again after more rows are ready.',
+    )
   }
   pushValidatedToDb()
 }
