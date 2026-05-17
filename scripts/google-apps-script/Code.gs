@@ -151,6 +151,46 @@ function substitute_(template, ticker, companyName) {
   return t.split('{{COMPANY_NAME}}').join(c)
 }
 
+/** True when output looks cut off (no sentence end, or API hit token cap). */
+function looksIncompleteParagraph_(text) {
+  var s = String(text || '').trim()
+  if (s.length < 50) return true
+  return !/[.!?]["']?\s*$/.test(s)
+}
+
+function geminiGenerationConfig_(maxOutputTokens) {
+  var cfg = {
+    temperature: 0.35,
+    maxOutputTokens: maxOutputTokens,
+  }
+  var model = getGeminiModel_()
+  // 2.5 models spend “thinking” tokens inside maxOutputTokens → short/empty answers unless disabled.
+  if (model.indexOf('2.5') >= 0) {
+    cfg.thinkingConfig = { thinkingBudget: 0 }
+  }
+  return cfg
+}
+
+function extractGeminiText_(body) {
+  var cand = ((body || {}).candidates || [])[0]
+  if (!cand) return { text: '', finishReason: '' }
+  var pts = (cand.content || {}).parts || []
+  var buf = []
+  for (var i = 0; i < pts.length; i++) {
+    if (pts[i].thought === true) continue
+    if (pts[i].text) buf.push(String(pts[i].text))
+  }
+  if (buf.length === 0) {
+    for (var j = 0; j < pts.length; j++) {
+      if (pts[j].text) buf.push(String(pts[j].text))
+    }
+  }
+  return {
+    text: buf.join('').replace(/\r\n/g, '\n').trim(),
+    finishReason: String(cand.finishReason || ''),
+  }
+}
+
 function callGemini_(userPrompt) {
   var key = getGeminiKey_()
   var model = getGeminiModel_()
@@ -159,24 +199,45 @@ function callGemini_(userPrompt) {
     model +
     ':generateContent?key=' +
     encodeURIComponent(key)
-  var res = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    muteHttpExceptions: true,
-    payload: JSON.stringify({
-      contents: [{ parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.35, maxOutputTokens: 1024 },
-    }),
-  })
-  if (res.getResponseCode() !== 200) {
-    throw new Error('Gemini HTTP ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 500))
+  var limits = [2048, 4096]
+  var lastErr = ''
+  for (var attempt = 0; attempt < limits.length; attempt++) {
+    var res = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      muteHttpExceptions: true,
+      payload: JSON.stringify({
+        contents: [{ parts: [{ text: userPrompt }] }],
+        generationConfig: geminiGenerationConfig_(limits[attempt]),
+      }),
+    })
+    if (res.getResponseCode() !== 200) {
+      throw new Error('Gemini HTTP ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 500))
+    }
+    var parsed = extractGeminiText_(JSON.parse(res.getContentText()))
+    if (!parsed.text) {
+      lastErr = 'Empty Gemini response'
+      continue
+    }
+    if (parsed.finishReason === 'MAX_TOKENS' || looksIncompleteParagraph_(parsed.text)) {
+      lastErr = 'Incomplete Gemini response (' + (parsed.finishReason || 'no sentence end') + ')'
+      continue
+    }
+    return parsed.text
   }
-  var body = JSON.parse(res.getContentText())
-  var parts = (((body || {}).candidates || [])[0] || {}).content || {}
-  var pts = parts.parts || []
-  var text = (pts[0] && pts[0].text) ? String(pts[0].text).trim() : ''
-  if (!text) throw new Error('Empty Gemini response')
-  return text.replace(/\r\n/g, '\n').trim()
+  throw new Error(lastErr || 'Gemini failed')
+}
+
+function rowNeedsGenerate_(ticker, moat, how, deals, status) {
+  if (!ticker) return false
+  var st = String(status || '')
+  if (st.indexOf('gemini_error') >= 0) return true
+  var b = String(moat || '').trim()
+  var c = String(how || '').trim()
+  var d = String(deals || '').trim()
+  if (!b || !c || !d) return true
+  if (looksIncompleteParagraph_(b) || looksIncompleteParagraph_(c) || looksIncompleteParagraph_(d)) return true
+  return false
 }
 
 function pullTickersFromDb(silent) {
@@ -224,7 +285,7 @@ function pullTickersFromDb(silent) {
   else notify_(msg)
 }
 
-/** Rows needing Gemini (empty B or prior gemini_error). Optional cap for manual runs. */
+/** Rows needing Gemini (missing, truncated, or prior gemini_error). Optional cap for manual runs. */
 function rowsNeedingGenerate_(sh, maxRows) {
   var last = sh.getLastRow()
   if (last < 2) return []
@@ -233,9 +294,7 @@ function rowsNeedingGenerate_(sh, maxRows) {
   var out = []
   for (var i = 0; i < vals.length; i++) {
     var t = (vals[i][0] || '').toString().trim()
-    var b = (vals[i][1] || '').toString().trim()
-    var st = (vals[i][4] || '').toString()
-    if (t && (!b || st.indexOf('gemini_error') >= 0)) {
+    if (rowNeedsGenerate_(t, vals[i][1], vals[i][2], vals[i][3], vals[i][4])) {
       out.push(i + 2)
       if (maxRows != null && out.length >= maxRows) break
     }
@@ -254,9 +313,8 @@ function countCyclePending_(sh) {
   for (var i = 0; i < vals.length; i++) {
     var t = (vals[i][0] || '').toString().trim()
     if (!t) continue
-    var b = (vals[i][1] || '').toString().trim()
     var st = (vals[i][4] || '').toString()
-    if (!b || st.indexOf('gemini_error') >= 0) gen++
+    if (rowNeedsGenerate_(t, vals[i][1], vals[i][2], vals[i][3], st)) gen++
     else if (st === 'ready_to_sync') push++
   }
   return { generate: gen, push: push }

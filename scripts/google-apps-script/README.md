@@ -122,6 +122,7 @@ You can tune `GEMINI_SLEEP_MS`, `GEMINI_GENERATION_BUDGET_MS`, and `SCHEDULED_MA
 | Pull fails                     | `MOAT_PIPELINE_API`, passphrase, Vercel env `MOAT_ADMIN_PASSPHRASE` / `SUPABASE_*`                                           |
 | Gemini HTTP 404 (model)        | Set Script property `GEMINI_MODEL` to `gemini-1.5-flash` or another current model from Google AI Studio. Older defaults like `gemini-2.0-flash` may be blocked for new keys. |
 | Gemini fails (other)           | `GEMINI_API_KEY`, quota, wrong model id                                                                                    |
+| Text cut off mid-sentence      | **Gemini 2.5** can spend output budget on “thinking” tokens. Script sets `thinkingBudget: 0` and retries incomplete answers. Re-run **2** (or wait for scheduled runs) on rows with `gemini_error` or text ending without `.` `!` `?` |
 | Push returns 400               | Server rejected text (too short, IR filler, blocklist). Read **Status** column message; fix prompt or row and re-run step 3 |
 | Wrong company (e.g. `AA`)      | Use **`{{COMPANY_NAME}}`** in all three prompts; confirm **F** matches the issuer you want; redeploy API so `tickers` returns `entries` with display names |
 | **Exceeded maximum execution time** | Google caps one run at **~6 minutes**. The script uses a **time budget** and stops partway through large batches so you can run **2** again on the rest. Select fewer rows per run if you prefer one shot; tune `GEMINI_SLEEP_MS` / `GEMINI_GENERATION_BUDGET_MS` in Script properties. |
