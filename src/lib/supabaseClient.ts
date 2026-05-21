@@ -23,6 +23,14 @@ export interface ScreenChartRow {
   updated_at: string
 }
 
+/** Row from `ticker_next_earnings` (nightly FMP next earnings for Home). */
+export interface TickerNextEarningsRow {
+  symbol: string
+  next_earnings_date: string | null
+  fetch_error: string | null
+  updated_at: string
+}
+
 /** Row from `company_moat_summaries` (moat + revenue narrative on Home MOAT ANALYSIS). */
 export interface CompanyMoatSummaryRow {
   symbol: string

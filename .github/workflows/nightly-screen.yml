@@ -1,24 +1,23 @@
-# Nightly batch: scores a universe via FMP, upserts `screen_scores`, then precomputes
-# FMP OHLC into `screen_charts` for the Screener “Chart” popup.
+# Nightly batch: scores a universe via FMP, upserts `screen_scores`, precomputes
+# FMP OHLC into `screen_charts`, then fills `ticker_next_earnings` for the Home page.
 #
 # Secrets (repo → Settings → Secrets and variables → Actions):
 #   FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-# Optional env overrides in each job below: SCREEN_MAX_TICKERS, SCREEN_TICKER_GAP_MS, SCREEN_OFFSET
-# Apply migrations so `screen_charts` exists: `npx supabase db push` (see supabase/migrations/).
+# Optional env overrides per job: SCREEN_MAX_TICKERS, SCREEN_TICKER_GAP_MS, SCREEN_OFFSET,
+# SCREEN_EARNINGS_GAP_MS (earnings job only).
+# Apply migrations: `npx supabase db push` (see supabase/migrations/).
 #
 # GitHub `schedule` events are not guaranteed to an exact minute; typical minimum cadence
 # for frequent crons is ~5 minutes. This workflow runs once per day (UTC).
 #
-# The screener and chart precompute run as **separate jobs** (`screen` then `charts`) so each
-# gets its own `timeout-minutes` budget. A single job running both steps could exhaust the
-# limit during scoring and terminate before most `screen_charts` rows exist (Charts tab uses
-# an inner join to `screen_charts`, so the visible count matches completed chart upserts).
+# Jobs are split (`screen` → `charts` → `earnings`) so each step gets its own `timeout-minutes`
+# budget. A single job running scoring plus chart precompute can exhaust the limit before all
+# `screen_charts` rows exist; the earnings pass uses a lighter per-symbol delay.
 
 name: Nightly screen
 
 on:
   schedule:
-    # 07:15 UTC daily — tweak as needed (cron uses UTC).
     - cron: '15 7 * * *'
   workflow_dispatch:
 
@@ -70,3 +69,26 @@ jobs:
 
       - name: Precompute screener charts
         run: npm run screen:charts
+
+  earnings:
+    needs: charts
+    runs-on: ubuntu-latest
+    timeout-minutes: 720
+    env:
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SCREEN_EARNINGS_GAP_MS: '3000'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Upsert next earnings dates
+        run: npm run screen:earnings

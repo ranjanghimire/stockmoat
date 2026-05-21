@@ -18,6 +18,11 @@ import { fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
 import { fetchHomeFmpBundleViaEdge, quoteSnapshotMsFromEdgeMeta, shouldUseHomeFmpEdgeCache, type HomeFmpEdgeMeta } from '../lib/fmp/fetchHomeFmpViaEdge'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
+import {
+  fetchFmpNextEarningsDate,
+  formatNextEarningsDisplay,
+  utcCalendarDateString,
+} from '../lib/fmp/fetchFmpNextEarningsDate'
 import { mapFmpSectorToProfile } from '../lib/fmp/mapSectorToProfile'
 import { buildMoatFundamentalsSnapshot } from '../lib/moatFundamentalsSnapshot'
 import { fetchPriceCharts } from '../lib/fetchPriceCharts'
@@ -69,6 +74,14 @@ export default function HomePage() {
   const [priceChartsLoading, setPriceChartsLoading] = useState(false)
   const [priceChartsError, setPriceChartsError] = useState<string | null>(null)
   const [chartLoadGeneration, setChartLoadGeneration] = useState(0)
+
+  const [nextEarningsState, setNextEarningsState] = useState<
+    | { status: 'loading' }
+    | { status: 'ready'; dateLabel: string; fromLiveApi: boolean }
+    | { status: 'empty' }
+    | { status: 'error'; message: string }
+    | null
+  >(null)
 
   const tickerFromParams = searchParams.get('ticker')?.trim().toUpperCase() ?? ''
   useEffect(() => {
@@ -273,6 +286,93 @@ export default function HomePage() {
     }
   }, [submitted, chartLoadGeneration])
 
+  useEffect(() => {
+    const ac = new AbortController()
+    let cancelled = false
+
+    void (async () => {
+      if (isYahooDevProvider()) {
+        if (!cancelled) setNextEarningsState(null)
+        return
+      }
+
+      const sym = submitted.trim().toUpperCase() || 'MSFT'
+      if (!cancelled) setNextEarningsState({ status: 'loading' })
+
+      const today = utcCalendarDateString()
+      const sb = getSupabaseBrowserClient()
+      let dbRow: { next_earnings_date: string | null; fetch_error: string | null } | null = null
+
+      if (sb) {
+        const { data, error } = await sb
+          .from('ticker_next_earnings')
+          .select('next_earnings_date, fetch_error')
+          .eq('symbol', sym)
+          .maybeSingle()
+        if (cancelled) return
+        if (error) {
+          setNextEarningsState({ status: 'error', message: error.message })
+          return
+        }
+        dbRow = data as { next_earnings_date: string | null; fetch_error: string | null } | null
+        if (dbRow?.fetch_error) {
+          setNextEarningsState({ status: 'error', message: dbRow.fetch_error })
+          return
+        }
+        if (dbRow?.next_earnings_date && dbRow.next_earnings_date >= today) {
+          setNextEarningsState({
+            status: 'ready',
+            dateLabel: formatNextEarningsDisplay(dbRow.next_earnings_date),
+            fromLiveApi: false,
+          })
+          return
+        }
+      }
+
+      const fmpKey = getFmpApiKey()
+      if (fmpKey) {
+        try {
+          const { nextDate } = await fetchFmpNextEarningsDate(sym, fmpKey, { signal: ac.signal })
+          if (cancelled) return
+          if (nextDate) {
+            setNextEarningsState({
+              status: 'ready',
+              dateLabel: formatNextEarningsDisplay(nextDate),
+              fromLiveApi: true,
+            })
+          } else {
+            setNextEarningsState({ status: 'empty' })
+          }
+        } catch (e) {
+          if (!cancelled) {
+            setNextEarningsState({
+              status: 'error',
+              message: e instanceof Error ? e.message : String(e),
+            })
+          }
+        }
+        return
+      }
+
+      if (!cancelled) {
+        if (dbRow?.next_earnings_date) {
+          setNextEarningsState({
+            status: 'ready',
+            dateLabel: formatNextEarningsDisplay(dbRow.next_earnings_date),
+            fromLiveApi: false,
+          })
+        } else {
+          setNextEarningsState({ status: 'empty' })
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
+  }, [submitted])
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const sym = tickerInput.trim().toUpperCase() || 'MSFT'
@@ -374,6 +474,8 @@ export default function HomePage() {
                 setManualProfile(mp)
               }}
               delayedPrice={analysis.delayedPrice}
+              nextEarningsOmit={isYahooDevProvider()}
+              nextEarnings={nextEarningsState}
             />
             {analysis.fundamentals ? (
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />

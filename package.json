@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "screen:nightly": "vite-node src/scripts/nightly-screen.ts",
     "screen:charts": "vite-node src/scripts/nightly-screen-charts.ts",
+    "screen:earnings": "vite-node src/scripts/nightly-ticker-earnings.ts",
     "backfill:editorial": "vite-node scripts/backfill-editorial-summaries.ts",
     "backfill:editorial:curated-recent-all": "EDITORIAL_BACKFILL_CURATED_RECENT_DEALS_ALL=1 vite-node scripts/backfill-editorial-summaries.ts",
     "pilot:editorial": "vite-node scripts/pilot-editorial-five.ts",
