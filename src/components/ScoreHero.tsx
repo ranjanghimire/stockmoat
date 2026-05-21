@@ -16,6 +16,15 @@ interface ScoreHeroProps {
   manualProfile?: string
   onScoringProfileChange?: (next: { mode: 'auto' | 'manual'; manualProfile: string }) => void
   delayedPrice?: { value: number; currency: string; fetchedAt: number }
+  /** When true, hide the next-earnings row (Yahoo dev path has no FMP key). */
+  nextEarningsOmit?: boolean
+  /** Next earnings from DB and/or live FMP fallback (see HomePage). */
+  nextEarnings?:
+    | { status: 'loading' }
+    | { status: 'ready'; dateLabel: string; fromLiveApi: boolean }
+    | { status: 'empty' }
+    | { status: 'error'; message: string }
+    | null
 }
 
 function formatProfileId(id: string): string {
