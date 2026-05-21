@@ -50,14 +50,25 @@ async function main(): Promise<void> {
 
   const sb = createClient(supabaseUrl, serviceKey)
 
-  const { data: rows, error: listErr } = await sb.from('screen_scores').select('symbol').order('symbol', {
-    ascending: true,
-  })
-  if (listErr) {
-    console.error('Failed to list screen_scores:', listErr.message)
-    process.exit(1)
+  // PostgREST caps each response (often 1000 rows). Page so we do not silently skip symbols.
+  const pageSize = 1000
+  const symbols: string[] = []
+  for (let from = 0; ; from += pageSize) {
+    const { data: rows, error: listErr } = await sb
+      .from('screen_scores')
+      .select('symbol')
+      .order('symbol', { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (listErr) {
+      console.error('Failed to list screen_scores:', listErr.message)
+      process.exit(1)
+    }
+    const batch = (rows ?? [])
+      .map((r) => (typeof r.symbol === 'string' ? r.symbol.trim().toUpperCase() : ''))
+      .filter(Boolean)
+    symbols.push(...batch)
+    if (batch.length < pageSize) break
   }
-  const symbols = (rows ?? []).map((r) => (typeof r.symbol === 'string' ? r.symbol.trim().toUpperCase() : '')).filter(Boolean)
   console.log(`screen_charts: ${symbols.length} symbols from screen_scores. Gap ${gapMs}ms between FMP chart pulls.`)
 
   if (symbols.length === 0) {
