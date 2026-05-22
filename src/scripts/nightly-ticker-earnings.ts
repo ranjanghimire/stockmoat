@@ -5,7 +5,7 @@
  *   npm run screen:earnings
  *
  * Env: fmpApiKey | FMP_API_KEY | VITE_FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * Throttle: SCREEN_EARNINGS_GAP_MS when set, else SCREEN_TICKER_GAP_MS (default 3000 ms).
+ * Throttle: SCREEN_EARNINGS_GAP_MS when set, else SCREEN_TICKER_GAP_MS (default 3000 ms in script).
  */
 import { config as loadDotenv } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `ticker_next_earnings: ${symbols.length} symbols from screen_scores. Gap ${gapMs}ms between FMP calls. Today(UTC)=${utcCalendarDateString()}`,
+    `ticker_next_earnings: ${symbols.length} symbols from screen_scores. Gap ${gapMs}ms. Today(UTC)=${utcCalendarDateString()}`,
   )
 
   if (symbols.length === 0) {
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
         { onConflict: 'symbol' },
       )
       if (upErr) {
-        console.log(`ERR ${msg} (also failed to persist error: ${upErr.message})`)
+        console.log(`ERR ${msg} (persist failed: ${upErr.message})`)
       } else {
         console.log(`ERR ${msg}`)
       }

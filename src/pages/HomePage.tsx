@@ -56,6 +56,44 @@ function readTickerQuery(): string {
   return 'MSFT'
 }
 
+type NextEarningsHomeState =
+  | { status: 'loading' }
+  | { status: 'ready'; dateLabel: string; fromLiveApi: boolean }
+  | { status: 'empty' }
+  | { status: 'error'; message: string }
+
+function NextEarningsStrip({ symbol, state }: { symbol: string; state: NextEarningsHomeState }) {
+  return (
+    <section
+      className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3 text-sm text-slate-700 shadow-sm backdrop-blur-sm"
+      aria-label="Next earnings date"
+    >
+      <span className="font-semibold text-moat-ink">Next earnings</span>
+      <span className="ml-2 font-mono text-xs text-slate-600">{symbol}</span>
+      <span className="mx-2 text-slate-300">·</span>
+      {state.status === 'loading' ? (
+        <span className="text-slate-600">Loading…</span>
+      ) : state.status === 'error' ? (
+        <span className="text-amber-900">{state.message}</span>
+      ) : state.status === 'ready' ? (
+        <>
+          <span className="font-medium text-moat-ink">{state.dateLabel}</span>
+          <span className="text-slate-500">
+            {' '}
+            (
+            {state.fromLiveApi
+              ? 'live FMP — nightly job caches this in the database'
+              : 'from nightly database'}
+            )
+          </span>
+        </>
+      ) : (
+        <span className="text-slate-600">No upcoming date reported for this symbol.</span>
+      )}
+    </section>
+  )
+}
+
 export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [tickerInput, setTickerInput] = useState(readTickerQuery)
@@ -74,14 +112,7 @@ export default function HomePage() {
   const [priceChartsLoading, setPriceChartsLoading] = useState(false)
   const [priceChartsError, setPriceChartsError] = useState<string | null>(null)
   const [chartLoadGeneration, setChartLoadGeneration] = useState(0)
-
-  const [nextEarningsState, setNextEarningsState] = useState<
-    | { status: 'loading' }
-    | { status: 'ready'; dateLabel: string; fromLiveApi: boolean }
-    | { status: 'empty' }
-    | { status: 'error'; message: string }
-    | null
-  >(null)
+  const [nextEarningsState, setNextEarningsState] = useState<NextEarningsHomeState | null>(null)
 
   const tickerFromParams = searchParams.get('ticker')?.trim().toUpperCase() ?? ''
   useEffect(() => {
@@ -444,6 +475,13 @@ export default function HomePage() {
           error={error}
         />
 
+        {!isYahooDevProvider() ? (
+          <NextEarningsStrip
+            symbol={submitted.trim().toUpperCase() || 'MSFT'}
+            state={nextEarningsState ?? { status: 'loading' }}
+          />
+        ) : null}
+
         <PriceChartsPanel
           ticker={submitted.trim().toUpperCase() || 'MSFT'}
           data={priceCharts}
@@ -474,8 +512,6 @@ export default function HomePage() {
                 setManualProfile(mp)
               }}
               delayedPrice={analysis.delayedPrice}
-              nextEarningsOmit={isYahooDevProvider()}
-              nextEarnings={nextEarningsState}
             />
             {analysis.fundamentals ? (
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />

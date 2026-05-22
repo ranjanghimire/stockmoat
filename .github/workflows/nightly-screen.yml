@@ -1,18 +1,7 @@
-# Nightly batch: scores a universe via FMP, upserts `screen_scores`, precomputes
-# FMP OHLC into `screen_charts`, then fills `ticker_next_earnings` for the Home page.
+# Nightly: `screen_scores` → `screen_charts` → `ticker_next_earnings` (Home next earnings strip).
 #
-# Secrets (repo → Settings → Secrets and variables → Actions):
-#   FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-# Optional env overrides per job: SCREEN_MAX_TICKERS, SCREEN_TICKER_GAP_MS, SCREEN_OFFSET,
-# SCREEN_EARNINGS_GAP_MS (earnings job only).
-# Apply migrations: `npx supabase db push` (see supabase/migrations/).
-#
-# GitHub `schedule` events are not guaranteed to an exact minute; typical minimum cadence
-# for frequent crons is ~5 minutes. This workflow runs once per day (UTC).
-#
-# Jobs are split (`screen` → `charts` → `earnings`) so each step gets its own `timeout-minutes`
-# budget. A single job running scoring plus chart precompute can exhaust the limit before all
-# `screen_charts` rows exist; the earnings pass uses a lighter per-symbol delay.
+# Secrets: FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# Migrations: npx supabase db push
 
 name: Nightly screen
 
@@ -34,17 +23,12 @@ jobs:
       SCREEN_OFFSET: '0'
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run nightly screener
-        run: npm run screen:nightly
+      - run: npm ci
+      - run: npm run screen:nightly
 
   charts:
     needs: screen
@@ -54,21 +38,15 @@ jobs:
       FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # Same throttle as scoring unless you set SCREEN_CHART_GAP_MS in repo env.
       SCREEN_TICKER_GAP_MS: '30000'
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Precompute screener charts
-        run: npm run screen:charts
+      - run: npm ci
+      - run: npm run screen:charts
 
   earnings:
     needs: charts
@@ -81,14 +59,9 @@ jobs:
       SCREEN_EARNINGS_GAP_MS: '3000'
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Upsert next earnings dates
-        run: npm run screen:earnings
+      - run: npm ci
+      - run: npm run screen:earnings

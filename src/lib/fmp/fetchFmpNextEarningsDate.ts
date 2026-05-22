@@ -6,7 +6,7 @@ function isYmd(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s)
 }
 
-/** Calendar date in UTC (YYYY-MM-DD) for comparisons with FMP `date` fields. */
+/** Calendar date in UTC (YYYY-MM-DD) for comparisons with FMP date fields. */
 export function utcCalendarDateString(d = new Date()): string {
   return d.toISOString().slice(0, 10)
 }
