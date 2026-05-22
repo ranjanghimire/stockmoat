@@ -27,16 +27,28 @@ export function NewsSubscribeButton() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),
       })
-      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string }
+      const raw = await res.text()
+      let data: { ok?: boolean; message?: string; error?: string } = {}
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {}
+      } catch {
+        setError(
+          res.ok
+            ? 'Unexpected server response.'
+            : `Subscribe API unavailable (${res.status}). Redeploy after latest changes.`,
+        )
+        setState('idle')
+        return
+      }
       if (!res.ok || !data.ok) {
-        setError(data.message ?? data.error ?? 'Subscription failed.')
+        setError(data.message ?? data.error ?? `Subscription failed (${res.status}).`)
         setState('idle')
         return
       }
       setMessage(data.message ?? 'Check your inbox to confirm.')
       setState('done')
     } catch {
-      setError('Could not reach the server. Try again from the deployed site.')
+      setError('Network error — check your connection and try again.')
       setState('idle')
     }
   }
