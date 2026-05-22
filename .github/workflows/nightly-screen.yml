@@ -1,5 +1,8 @@
 # Nightly: `screen_scores` → `screen_charts` → `ticker_next_earnings` (Home next earnings strip).
 #
+# GitHub-hosted jobs hard-cap at 6h. Budgets + gaps below keep each job under ~5h.
+# Charts runs even when screen fails/times out (`if: always()`).
+#
 # Secrets: FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 # Migrations: npx supabase db push
 
@@ -13,12 +16,14 @@ on:
 jobs:
   screen:
     runs-on: ubuntu-latest
-    timeout-minutes: 720
+    timeout-minutes: 360
     env:
       FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SCREEN_TICKER_GAP_MS: '30000'
+      NIGHTLY_BUDGET: '320'
+      SCREEN_TICKER_GAP_MS: '15000'
+      SCREEN_FETCH_PEERS: 'false'
       SCREEN_MAX_TICKERS: '1000'
       SCREEN_OFFSET: '0'
     steps:
@@ -32,13 +37,15 @@ jobs:
 
   charts:
     needs: screen
+    if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 720
+    timeout-minutes: 360
     env:
       FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SCREEN_TICKER_GAP_MS: '30000'
+      NIGHTLY_CHART_BUDGET: '400'
+      SCREEN_CHART_GAP_MS: '8000'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -50,8 +57,9 @@ jobs:
 
   earnings:
     needs: charts
+    if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 720
+    timeout-minutes: 360
     env:
       FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
