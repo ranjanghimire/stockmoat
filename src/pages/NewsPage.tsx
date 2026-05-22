@@ -84,8 +84,7 @@ export default function NewsPage() {
       <header className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight text-moat-ink">Material news</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          High-impact events from sector anchor companies — not a full-market headline feed. Updated by an automated
-          pipeline (FMP news & press, SEC 8-K, Gemini scoring).
+          High-impact events from various sectors. The true movers!
         </p>
       </header>
 
