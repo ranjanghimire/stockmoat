@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { brevoConfigFromEnv } from '../src/lib/news/brevoConfig'
+import { resendConfigFromEnv } from '../src/lib/news/resendConfig'
 import { confirmNewsSubscription, requestNewsSubscription, unsubscribeNews } from '../src/lib/news/subscribeFlow'
 
 function cors(res: VercelResponse): void {
@@ -17,8 +17,8 @@ function supabaseAdmin() {
 }
 
 function redirectToNews(res: VercelResponse, query: string): void {
-  const brevo = brevoConfigFromEnv()
-  const base = brevo?.appUrl ?? '/'
+  const resend = resendConfigFromEnv()
+  const base = resend?.appUrl ?? '/'
   const path = base.startsWith('http') ? `${base}/news` : '/news'
   res.redirect(302, `${path}?${query}`)
 }
@@ -36,8 +36,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  const brevo = brevoConfigFromEnv()
-  if (!brevo) {
+  const resend = resendConfigFromEnv()
+  if (!resend) {
     res.status(503).json({ error: 'Email service not configured' })
     return
   }
@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   if (req.method === 'POST') {
     const body = req.body as { email?: unknown }
     const email = typeof body?.email === 'string' ? body.email : ''
-    const out = await requestNewsSubscription(sb, email, brevo)
+    const out = await requestNewsSubscription(sb, email, resend)
     res.status(out.ok ? 200 : 400).json({ ok: out.ok, message: out.message })
     return
   }

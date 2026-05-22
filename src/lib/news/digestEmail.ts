@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendBrevoEmail } from '../email/brevo'
-import type { BrevoNewsConfig } from './brevoConfig'
+import { sendResendEmail } from '../email/resend'
+import type { ResendNewsConfig } from './resendConfig'
 import { escapeHtml } from './emailTokens'
 import type { MaterialNewsInsert } from './types'
 
@@ -47,7 +47,7 @@ function buildDigestText(items: MaterialNewsInsert[], appUrl: string): string {
 export async function sendMaterialNewsDigest(
   sb: SupabaseClient,
   items: MaterialNewsInsert[],
-  brevo: BrevoNewsConfig,
+  resend: ResendNewsConfig,
 ): Promise<DigestSendResult> {
   if (items.length === 0) return { sent: 0, failed: 0, skipped: true }
 
@@ -60,9 +60,9 @@ export async function sendMaterialNewsDigest(
 
   const n = items.length
   const subject = n === 1 ? 'StockMoat: 1 new material event' : `StockMoat: ${n} new material events`
-  const htmlContent = buildDigestHtml(items, brevo.appUrl)
-  const textContent = buildDigestText(items, brevo.appUrl)
-  const sender = { email: brevo.senderEmail, name: brevo.senderName }
+  const htmlContent = buildDigestHtml(items, resend.appUrl)
+  const textContent = buildDigestText(items, resend.appUrl)
+  const sender = { email: resend.senderEmail, name: resend.senderName }
 
   let sent = 0
   let failed = 0
@@ -72,17 +72,17 @@ export async function sendMaterialNewsDigest(
     const unsubToken = typeof sub.unsubscribe_token === 'string' ? sub.unsubscribe_token : ''
     if (!email) continue
 
-    const unsubUrl = `${brevo.appUrl}/api/news-subscribe?action=unsubscribe&token=${encodeURIComponent(unsubToken)}`
+    const unsubUrl = `${resend.appUrl}/api/news-subscribe?action=unsubscribe&token=${encodeURIComponent(unsubToken)}`
     const html = `${htmlContent}<p style="font-size:12px;color:#94a3b8;"><a href="${escapeHtml(unsubUrl)}">Unsubscribe</a></p>`
 
     try {
-      await sendBrevoEmail({
-        apiKey: brevo.apiKey,
+      await sendResendEmail({
+        apiKey: resend.apiKey,
         sender,
-        to: [{ email }],
+        to: email,
         subject,
-        htmlContent: html,
-        textContent: `${textContent}\n\nUnsubscribe: ${unsubUrl}`,
+        html,
+        text: `${textContent}\n\nUnsubscribe: ${unsubUrl}`,
       })
       sent++
       await sleep(120)

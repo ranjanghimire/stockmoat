@@ -1,4 +1,4 @@
--- Email subscribers for material news hourly digest (Brevo).
+-- Email subscribers for material news hourly digest (Resend).
 
 create table if not exists public.news_subscribers (
   id uuid primary key default gen_random_uuid(),

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendBrevoEmail } from '../email/brevo'
-import type { BrevoNewsConfig } from './brevoConfig'
+import { sendResendEmail } from '../email/resend'
+import type { ResendNewsConfig } from './resendConfig'
 import { escapeHtml, newEmailToken, normalizeSubscriberEmail } from './emailTokens'
 
 export type SubscribeResult =
@@ -10,7 +10,7 @@ export type SubscribeResult =
 export async function requestNewsSubscription(
   sb: SupabaseClient,
   rawEmail: string,
-  brevo: BrevoNewsConfig,
+  resend: ResendNewsConfig,
 ): Promise<SubscribeResult> {
   const email = normalizeSubscriberEmail(rawEmail)
   if (!email) return { ok: false, message: 'Please enter a valid email address.' }
@@ -52,7 +52,7 @@ export async function requestNewsSubscription(
     if (insErr) return { ok: false, message: 'Could not process subscription. Try again later.' }
   }
 
-  const confirmUrl = `${brevo.appUrl}/api/news-subscribe?action=confirm&token=${encodeURIComponent(confirmToken)}`
+  const confirmUrl = `${resend.appUrl}/api/news-subscribe?action=confirm&token=${encodeURIComponent(confirmToken)}`
   const html = `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;">
 <p>Confirm your subscription to <strong>StockMoat material news</strong> (hourly digest when new high-impact events are published).</p>
 <p><a href="${escapeHtml(confirmUrl)}">Confirm subscription</a></p>
@@ -60,13 +60,13 @@ export async function requestNewsSubscription(
 </body></html>`
 
   try {
-    await sendBrevoEmail({
-      apiKey: brevo.apiKey,
-      sender: { email: brevo.senderEmail, name: brevo.senderName },
-      to: [{ email }],
+    await sendResendEmail({
+      apiKey: resend.apiKey,
+      sender: { email: resend.senderEmail, name: resend.senderName },
+      to: email,
       subject: 'Confirm your StockMoat news subscription',
-      htmlContent: html,
-      textContent: `Confirm your StockMoat news subscription:\n${confirmUrl}`,
+      html,
+      text: `Confirm your StockMoat news subscription:\n${confirmUrl}`,
     })
   } catch {
     return { ok: false, message: 'Could not send confirmation email. Try again later.' }

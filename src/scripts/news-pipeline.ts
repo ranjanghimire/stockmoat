@@ -5,11 +5,11 @@
  *
  * Env: FMP_API_KEY (or fmpApiKey), GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Optional: GEMINI_MODEL, SEC_USER_AGENT, NEWS_FMP_GAP_MS, NEWS_SEC_GAP_MS
- * Digest email: BREVO_KEY, BREVO_SENDER_EMAIL, PUBLIC_APP_URL, BREVO_SENDER_NAME
+ * Digest email: RESEND_KEY, RESEND_SENDER_EMAIL, PUBLIC_APP_URL, RESEND_SENDER_NAME
  */
 import { config as loadDotenv } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
-import { brevoConfigFromEnv } from '../lib/news/brevoConfig'
+import { resendConfigFromEnv } from '../lib/news/resendConfig'
 import { runNewsPipeline } from '../lib/news/runNewsPipeline'
 
 loadDotenv({ path: '.env.local' })
@@ -47,9 +47,9 @@ async function main(): Promise<void> {
   const sb = createClient(supabaseUrl, serviceKey)
   console.log('Starting material news pipeline…')
 
-  const brevo = brevoConfigFromEnv(process.env)
-  if (!brevo) {
-    console.warn('Brevo digest skipped: set BREVO_KEY, BREVO_SENDER_EMAIL, and PUBLIC_APP_URL in .env.local')
+  const resend = resendConfigFromEnv(process.env)
+  if (!resend) {
+    console.warn('Resend digest skipped: set RESEND_KEY, RESEND_SENDER_EMAIL, and PUBLIC_APP_URL in .env.local')
   }
 
   const stats = await runNewsPipeline(sb, {
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
     secUserAgent: env('SEC_USER_AGENT') || undefined,
     fmpGapMs: parseIntEnv('NEWS_FMP_GAP_MS', 400),
     secGapMs: parseIntEnv('NEWS_SEC_GAP_MS', 280),
-    brevo,
+    resend,
   })
 
   console.log('Done.', JSON.stringify(stats, null, 2))

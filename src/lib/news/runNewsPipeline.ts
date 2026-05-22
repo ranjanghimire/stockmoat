@@ -5,7 +5,7 @@ import { DEFAULT_GEMINI_NEWS_MODEL, scoreNewsCandidatesWithGemini } from './gemi
 import { allAnchorSymbols, lanesBySymbol, loadNewsAnchors } from './loadNewsAnchors'
 import { shouldRejectCandidate } from './prefilter'
 import { fetchRecent8KCandidates } from './sec8k/fetchRecent8K'
-import type { BrevoNewsConfig } from './brevoConfig'
+import type { ResendNewsConfig } from './resendConfig'
 import { sendMaterialNewsDigest } from './digestEmail'
 import type { MaterialNewsInsert, NewsCandidate } from './types'
 
@@ -18,7 +18,7 @@ export interface NewsPipelineEnv {
   secGapMs?: number
   geminiBatchSize?: number
   maxAgeHours?: number
-  brevo?: BrevoNewsConfig | null
+  resend?: ResendNewsConfig | null
 }
 
 export interface NewsPipelineResult {
@@ -292,9 +292,9 @@ export async function runNewsPipeline(sb: SupabaseClient, env: NewsPipelineEnv):
     .eq('id', 'main')
   if (statsErr) console.warn('news_pipeline_state stats:', statsErr.message)
 
-  if (result.published > 0 && env.brevo) {
+  if (result.published > 0 && env.resend) {
     try {
-      const digest = await sendMaterialNewsDigest(sb, publishedThisRun, env.brevo)
+      const digest = await sendMaterialNewsDigest(sb, publishedThisRun, env.resend)
       result.digestEmailsSent = digest.sent
       result.digestEmailsFailed = digest.failed
     } catch (e) {
