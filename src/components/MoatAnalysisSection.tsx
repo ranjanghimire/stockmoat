@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import type { MoatAnalysis } from '../lib/computeMoatAnalysis'
 import { companyNameWithTicker } from '../lib/deriveMoatKeyTakeaway'
 import { fetchCompanyEditorialSummaries } from '../lib/fetchCompanyEditorialSummaries'
@@ -40,6 +40,52 @@ function MoatSkeleton() {
   )
 }
 
+function CollapsibleSubsection({
+  title,
+  defaultOpen,
+  children,
+}: {
+  title: ReactNode
+  defaultOpen: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const panelId = useId()
+
+  return (
+    <div className="border-b border-slate-100/90 pb-6 last:border-b-0 last:pb-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 text-left"
+      >
+        <span className="min-w-0 flex-1">{title}</span>
+        <span
+          className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M4 6l4 4 4-4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+      {open ? (
+        <div id={panelId} className="mt-2">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function MoatEditorialSubsections({ displayName, ticker }: { displayName: string; ticker: string }) {
   const [moatBody, setMoatBody] = useState<string | null>(null)
   const [howTheyMakeMoneyBody, setHowTheyMakeMoneyBody] = useState<string | null>(null)
@@ -75,26 +121,31 @@ function MoatEditorialSubsections({ displayName, ticker }: { displayName: string
   const co = companyNameWithTicker(displayName, ticker)
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-0">
       {moatBody ? (
-        <div>
-          <SubsectionLabel>What&apos;s the moat?</SubsectionLabel>
-          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{moatBody}</p>
-        </div>
+        <CollapsibleSubsection defaultOpen={false} title={<SubsectionLabel>What&apos;s the moat?</SubsectionLabel>}>
+          <p className="text-sm font-medium leading-relaxed text-slate-800 md:text-base">{moatBody}</p>
+        </CollapsibleSubsection>
       ) : null}
       {howTheyMakeMoneyBody ? (
-        <div>
-          <SubsectionLabel sentenceCase>
-            How {co} makes money?
-          </SubsectionLabel>
-          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{howTheyMakeMoneyBody}</p>
-        </div>
+        <CollapsibleSubsection
+          defaultOpen={false}
+          title={
+            <SubsectionLabel sentenceCase>
+              How {co} makes money?
+            </SubsectionLabel>
+          }
+        >
+          <p className="text-sm font-medium leading-relaxed text-slate-800 md:text-base">{howTheyMakeMoneyBody}</p>
+        </CollapsibleSubsection>
       ) : null}
       {recentDealsBody ? (
-        <div>
-          <SubsectionLabel sentenceCase>Recent deals and partnerships</SubsectionLabel>
-          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800 md:text-base">{recentDealsBody}</p>
-        </div>
+        <CollapsibleSubsection
+          defaultOpen={true}
+          title={<SubsectionLabel sentenceCase>Recent deals and partnerships</SubsectionLabel>}
+        >
+          <p className="text-sm font-medium leading-relaxed text-slate-800 md:text-base">{recentDealsBody}</p>
+        </CollapsibleSubsection>
       ) : null}
     </div>
   )

@@ -76,17 +76,7 @@ function NextEarningsStrip({ symbol, state }: { symbol: string; state: NextEarni
       ) : state.status === 'error' ? (
         <span className="text-amber-900">{state.message}</span>
       ) : state.status === 'ready' ? (
-        <>
-          <span className="font-medium text-moat-ink">{state.dateLabel}</span>
-          <span className="text-slate-500">
-            {' '}
-            (
-            {state.fromLiveApi
-              ? 'live FMP — nightly job caches this in the database'
-              : 'from nightly database'}
-            )
-          </span>
-        </>
+        <span className="font-medium text-moat-ink">{state.dateLabel}</span>
       ) : (
         <span className="text-slate-600">No upcoming date reported for this symbol.</span>
       )}
