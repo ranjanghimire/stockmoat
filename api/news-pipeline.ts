@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { brevoConfigFromEnv } from '../src/lib/news/brevoConfig'
 import { runNewsPipeline } from '../src/lib/news/runNewsPipeline'
 
 function cors(res: VercelResponse): void {
@@ -52,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       geminiApiKey: geminiKey,
       geminiModel: process.env.GEMINI_MODEL,
       secUserAgent: process.env.SEC_USER_AGENT,
+      brevo: brevoConfigFromEnv(process.env),
     })
     res.status(200).json({ ok: true, stats })
   } catch (e) {

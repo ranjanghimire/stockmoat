@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { NewsSubscribeButton } from '../components/NewsSubscribeButton'
 import { loadNewsAnchors } from '../lib/news/loadNewsAnchors'
 import { getSupabaseBrowserClient, type MaterialNewsRow } from '../lib/supabaseClient'
 
@@ -30,10 +31,33 @@ function sourceBadge(type: MaterialNewsRow['source_type']): string {
   return 'News'
 }
 
+const SUBSCRIBE_BANNERS: Record<string, string> = {
+  confirmed: 'Subscription confirmed. You will receive hourly digests when new material news is published.',
+  unsubscribed: 'You have been unsubscribed from material news emails.',
+  error: 'Something went wrong with that link. Try subscribing again.',
+}
+
 export default function NewsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [rows, setRows] = useState<MaterialNewsRow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const subscribeBanner = useMemo(() => {
+    const key = searchParams.get('subscribed')
+    if (!key) return null
+    return SUBSCRIBE_BANNERS[key] ?? null
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!searchParams.get('subscribed')) return
+    const t = window.setTimeout(() => {
+      const next = new URLSearchParams(searchParams)
+      next.delete('subscribed')
+      setSearchParams(next, { replace: true })
+    }, 8000)
+    return () => window.clearTimeout(t)
+  }, [searchParams, setSearchParams])
 
   const laneLabels = useMemo(() => {
     const root = loadNewsAnchors()
@@ -81,12 +105,24 @@ export default function NewsPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-moat-ink">Material news</h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          High-impact events from various sectors. The true movers!
-        </p>
+      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-moat-ink">Material news</h1>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">
+            High-impact events from various sectors. The true movers!
+          </p>
+        </div>
+        <NewsSubscribeButton />
       </header>
+
+      {subscribeBanner && (
+        <p
+          className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          role="status"
+        >
+          {subscribeBanner}
+        </p>
+      )}
 
       {loading && <p className="text-sm text-slate-500">Loading…</p>}
       {error && (

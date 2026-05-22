@@ -28,6 +28,9 @@ Workflow: `.github/workflows/news-pipeline.yml` — runs at **:20 UTC every hour
 | `GEMINI_MODEL` | No |
 | `NEWS_FMP_GAP_MS` | No (default 400) |
 | `NEWS_SEC_GAP_MS` | No (default 280) |
+| `BREVO_KEY` | For digest email |
+| `BREVO_SENDER_EMAIL` | For digest email |
+| `PUBLIC_APP_URL` | For digest + confirm links |
 
 ## Vercel API (optional)
 
@@ -35,7 +38,20 @@ Workflow: `.github/workflows/news-pipeline.yml` — runs at **:20 UTC every hour
 
 ## UI
 
-`/news` — reads `material_news` (anon RLS select).
+`/news` — reads `material_news` (anon RLS select). **Subscribe** sends a Brevo confirmation email; after confirm, hourly digests go out when the pipeline publishes new items.
+
+### Brevo (subscriber email)
+
+Uses the **REST API** (`BREVO_KEY`), not SMTP. In `.env.local` / GitHub secrets:
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `BREVO_KEY` | Yes | API key from Brevo → SMTP & API |
+| `BREVO_SENDER_EMAIL` | Yes | Must be a **verified sender** in Brevo (not the `smtp-relay` login id) |
+| `PUBLIC_APP_URL` | Yes | Production URL, e.g. `https://stockmoat.vercel.app` |
+| `BREVO_SENDER_NAME` | No | Default `StockMoat` |
+
+Apply migration `20260525120000_news_subscribers.sql`. Subscribe API: `POST /api/news-subscribe` with `{ "email": "..." }`.
 
 ## Anchors
 

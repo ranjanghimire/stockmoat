@@ -2,6 +2,7 @@
 #
 # Repo secrets: FMP_API_KEY, GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 # Optional secrets: SEC_USER_AGENT, GEMINI_MODEL, NEWS_FMP_GAP_MS, NEWS_SEC_GAP_MS
+# Digest email: BREVO_KEY, BREVO_SENDER_EMAIL, PUBLIC_APP_URL, BREVO_SENDER_NAME
 # Migration: supabase/migrations/20260524120000_material_news.sql
 
 name: News pipeline
@@ -25,6 +26,10 @@ jobs:
       GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
       NEWS_FMP_GAP_MS: ${{ secrets.NEWS_FMP_GAP_MS }}
       NEWS_SEC_GAP_MS: ${{ secrets.NEWS_SEC_GAP_MS }}
+      BREVO_KEY: ${{ secrets.BREVO_KEY }}
+      BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+      BREVO_SENDER_NAME: ${{ secrets.BREVO_SENDER_NAME }}
+      PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

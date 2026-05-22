@@ -5,6 +5,8 @@ import { DEFAULT_GEMINI_NEWS_MODEL, scoreNewsCandidatesWithGemini } from './gemi
 import { allAnchorSymbols, lanesBySymbol, loadNewsAnchors } from './loadNewsAnchors'
 import { shouldRejectCandidate } from './prefilter'
 import { fetchRecent8KCandidates } from './sec8k/fetchRecent8K'
+import type { BrevoNewsConfig } from './brevoConfig'
+import { sendMaterialNewsDigest } from './digestEmail'
 import type { MaterialNewsInsert, NewsCandidate } from './types'
 
 export interface NewsPipelineEnv {
@@ -16,6 +18,7 @@ export interface NewsPipelineEnv {
   secGapMs?: number
   geminiBatchSize?: number
   maxAgeHours?: number
+  brevo?: BrevoNewsConfig | null
 }
 
 export interface NewsPipelineResult {
@@ -26,6 +29,8 @@ export interface NewsPipelineResult {
   geminiScored: number
   published: number
   skippedCap: number
+  digestEmailsSent: number
+  digestEmailsFailed: number
 }
 
 function sleep(ms: number): Promise<void> {
@@ -160,7 +165,11 @@ export async function runNewsPipeline(sb: SupabaseClient, env: NewsPipelineEnv):
     geminiScored: 0,
     published: 0,
     skippedCap: 0,
+    digestEmailsSent: 0,
+    digestEmailsFailed: 0,
   }
+
+  const publishedThisRun: MaterialNewsInsert[] = []
 
   const seen = await loadSeenFingerprints(sb)
   const recentHeadlines = await loadRecentHeadlines(sb)
@@ -266,6 +275,7 @@ export async function runNewsPipeline(sb: SupabaseClient, env: NewsPipelineEnv):
       const { error } = await sb.from('material_news').upsert(publishedRows, { onConflict: 'source_url' })
       if (error) throw new Error(`material_news upsert: ${error.message}`)
       result.published += publishedRows.length
+      publishedThisRun.push(...publishedRows)
     }
 
     await markSeen(sb, batch)
@@ -281,6 +291,16 @@ export async function runNewsPipeline(sb: SupabaseClient, env: NewsPipelineEnv):
     .update({ last_stats: result, last_run_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', 'main')
   if (statsErr) console.warn('news_pipeline_state stats:', statsErr.message)
+
+  if (result.published > 0 && env.brevo) {
+    try {
+      const digest = await sendMaterialNewsDigest(sb, publishedThisRun, env.brevo)
+      result.digestEmailsSent = digest.sent
+      result.digestEmailsFailed = digest.failed
+    } catch (e) {
+      console.warn('Material news digest email:', e instanceof Error ? e.message : e)
+    }
+  }
 
   return result
 }
