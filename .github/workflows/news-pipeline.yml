@@ -1,0 +1,35 @@
+# Hourly: anchor FMP news/press + SEC 8-K → Gemini → `material_news`.
+#
+# Repo secrets: FMP_API_KEY, GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# Optional secrets: SEC_USER_AGENT, GEMINI_MODEL, NEWS_FMP_GAP_MS, NEWS_SEC_GAP_MS
+# Migration: supabase/migrations/20260524120000_material_news.sql
+
+name: News pipeline
+
+on:
+  schedule:
+    # Every hour at :20 UTC (staggered from nightly screen at 07:15 UTC)
+    - cron: '20 * * * *'
+  workflow_dispatch:
+
+jobs:
+  material-news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+      NEWS_FMP_GAP_MS: ${{ secrets.NEWS_FMP_GAP_MS }}
+      NEWS_SEC_GAP_MS: ${{ secrets.NEWS_SEC_GAP_MS }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run news:pipeline

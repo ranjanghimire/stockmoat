@@ -10,11 +10,28 @@ npm run news:pipeline
 ```
 
 **Env:** `FMP_API_KEY`, `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`  
-Optional: `GEMINI_MODEL` (default `gemini-2.5-flash`), `SEC_USER_AGENT`, `NEWS_FMP_GAP_MS`, `NEWS_SEC_GAP_MS`, `NEWS_PIPELINE_SECRET` (for API).
+Optional: `GEMINI_MODEL` (default `gemini-2.5-flash`), `SEC_USER_AGENT`, `NEWS_FMP_GAP_MS`, `NEWS_SEC_GAP_MS`.
 
-## Vercel cron (optional)
+## GitHub Actions (hourly)
 
-`POST /api/news-pipeline` with header `x-news-secret: <NEWS_PIPELINE_SECRET>`.
+Workflow: `.github/workflows/news-pipeline.yml` — runs at **:20 UTC every hour** (`20 * * * *`) and via **Actions → News pipeline → Run workflow**.
+
+**Repository secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Required |
+|--------|----------|
+| `FMP_API_KEY` | Yes |
+| `GEMINI_API_KEY` | Yes |
+| `SUPABASE_URL` | Yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes |
+| `SEC_USER_AGENT` | No — e.g. `StockMoat/1.0 (contact: you@email.com)` |
+| `GEMINI_MODEL` | No |
+| `NEWS_FMP_GAP_MS` | No (default 400) |
+| `NEWS_SEC_GAP_MS` | No (default 280) |
+
+## Vercel API (optional)
+
+`POST /api/news-pipeline` with `NEWS_PIPELINE_SECRET` and header `x-news-secret` — not scheduled on Vercel by default.
 
 ## UI
 
