@@ -1,0 +1,112 @@
+# StockMoat — news anchor universe (sector radar, not full screener)
+schema: stockmoat/news_anchors/1
+
+# Caps applied after Gemini scoring (rolling 24h UTC window in pipeline).
+publish:
+  impact_threshold: 8
+  global_max_per_24h: 15
+  per_lane_max_per_24h: 4
+
+# Lane tickers are ingested for FMP news/press + SEC 8-K only.
+# profile_ids: links to sector_profiles.v1.yaml for UI badges (optional).
+lanes:
+  banks_thrifts:
+    label: Banks & thrifts
+    profile_ids: [banks_thrifts]
+    tickers: [JPM, BAC, WFC]
+
+  insurance_general:
+    label: Insurance
+    profile_ids: [insurance_general]
+    tickers: [BRK.B, PGR, AIG]
+
+  capital_markets_brokers_asset_managers:
+    label: Capital markets
+    profile_ids: [capital_markets_brokers_asset_managers]
+    tickers: [BLK, SCHW, ICE]
+
+  reits:
+    label: REITs
+    profile_ids: [reits]
+    tickers: [PLD, AMT, EQIX]
+
+  utilities_electric_gas_water:
+    label: Utilities
+    profile_ids: [utilities_electric_gas_water]
+    tickers: [NEE, DUK, SO]
+
+  energy_exploration_production:
+    label: Energy E&P
+    profile_ids: [energy_exploration_production]
+    tickers: [XOM, CVX, COP]
+
+  energy_midstream_integrated_refining:
+    label: Energy midstream & refining
+    profile_ids: [energy_midstream_integrated_refining]
+    tickers: [WMB, KMI, MPC]
+
+  materials_mining_chemicals_paper_packaging:
+    label: Materials
+    profile_ids: [materials_mining_chemicals_paper_packaging]
+    tickers: [LIN, FCX, NEM]
+
+  industrials_machinery_aerospace_transportation_construction:
+    label: Industrials
+    profile_ids: [industrials_machinery_aerospace_transportation_construction]
+    tickers: [CAT, HON, GE]
+
+  consumer_staples_discretionary_general:
+    label: Consumer
+    profile_ids: [consumer_staples_discretionary_general]
+    tickers: [WMT, PG, COST]
+
+  healthcare_pharma_medtech_services_tools:
+    label: Healthcare
+    profile_ids: [healthcare_pharma_medtech_services_tools]
+    tickers: [UNH, LLY, JNJ]
+
+  agriculture:
+    label: Agriculture
+    profile_ids: []
+    tickers: [ADM]
+
+  telecommunications:
+    label: Telecommunications
+    profile_ids: []
+    tickers: [VZ, TMUS, T]
+
+  automotive:
+    label: Automotive
+    profile_ids: []
+    tickers: [TSLA, GM, TM]
+
+  biotechnology:
+    label: Biotechnology
+    profile_ids: []
+    tickers: [AMGN, GILD, REGN]
+
+  aerospace_defense:
+    label: Aerospace & defense
+    profile_ids: []
+    tickers: [LMT, RTX, BA]
+
+  # --- High-signal thematic lanes (more anchors) ---
+  ai_platforms:
+    label: AI platforms & hyperscalers
+    profile_ids: [information_technology]
+    tickers: [MSFT, GOOGL, META, AMZN, NVDA, AAPL, ORCL, IBM, CRM, PLTR]
+
+  semiconductors:
+    label: Semiconductors
+    profile_ids: [information_technology]
+    tickers: [NVDA, AMD, AVGO, INTC, QCOM, TSM, ASML, MU, AMAT, LRCX]
+
+  enterprise_software:
+    label: Enterprise software & cloud
+    profile_ids: [information_technology]
+    tickers: [MSFT, ORCL, CRM, ADBE, NOW, SNOW, WDAY, INTU, PANW, SNPS]
+
+  quantum_computing:
+    label: Quantum computing
+    profile_ids: [information_technology]
+    tickers: [IONQ, RGTI, QBTS, IBM, GOOGL, NVDA, MSFT, HON, AMZN, INTC]

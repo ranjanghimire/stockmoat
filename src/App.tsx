@@ -2,6 +2,7 @@ import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import AdminMoatSnapshotPage from './pages/AdminMoatSnapshotPage'
 import ChartsPage from './pages/ChartsPage'
 import HomePage from './pages/HomePage'
+import NewsPage from './pages/NewsPage'
 import ScreenerPage from './pages/ScreenerPage'
 
 function TopNav() {
@@ -20,6 +21,9 @@ function TopNav() {
         <NavLink to="/charts" className={linkClass}>
           Charts
         </NavLink>
+        <NavLink to="/news" className={linkClass}>
+          News
+        </NavLink>
       </nav>
     </div>
   )
@@ -33,6 +37,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/screen" element={<ScreenerPage />} />
         <Route path="/charts" element={<ChartsPage />} />
+        <Route path="/news" element={<NewsPage />} />
         <Route path="/admin/moat-snapshot" element={<AdminMoatSnapshotPage />} />
       </Routes>
     </BrowserRouter>

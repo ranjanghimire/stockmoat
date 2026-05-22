@@ -32,6 +32,23 @@ export interface TickerNextEarningsRow {
 }
 
 /** Row from `company_moat_summaries` (moat + revenue narrative on Home MOAT ANALYSIS). */
+export type MaterialNewsSourceType = 'fmp_news' | 'fmp_press' | 'sec_8k'
+
+/** Row from `material_news` (anchor-driven material events digest). */
+export interface MaterialNewsRow {
+  id: string
+  published_at: string
+  headline: string
+  summary: string
+  impact_score: number
+  category: string
+  lane_ids: string[]
+  tickers: string[]
+  source_type: MaterialNewsSourceType
+  source_url: string
+  anchor_symbol: string
+}
+
 export interface CompanyMoatSummaryRow {
   symbol: string
   body: string
