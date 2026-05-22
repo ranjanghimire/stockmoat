@@ -101,12 +101,22 @@ async function saveSecAccessions(sb: SupabaseClient, existing: Set<string>, adde
   if (error) throw new Error(`news_pipeline_state upsert: ${error.message}`)
 }
 
+function dedupeCandidatesByFingerprint(candidates: NewsCandidate[]): NewsCandidate[] {
+  const byFp = new Map<string, NewsCandidate>()
+  for (const c of candidates) {
+    if (!byFp.has(c.fingerprint)) byFp.set(c.fingerprint, c)
+  }
+  return [...byFp.values()]
+}
+
 async function markSeen(sb: SupabaseClient, candidates: NewsCandidate[]): Promise<void> {
-  if (candidates.length === 0) return
-  const rows = candidates.map((c) => ({
+  const unique = dedupeCandidatesByFingerprint(candidates)
+  if (unique.length === 0) return
+  const seenAt = new Date().toISOString()
+  const rows = unique.map((c) => ({
     fingerprint: c.fingerprint,
     source_url: c.sourceUrl,
-    seen_at: new Date().toISOString(),
+    seen_at: seenAt,
   }))
   const { error } = await sb.from('news_seen_candidates').upsert(rows, { onConflict: 'fingerprint' })
   if (error) throw new Error(`news_seen_candidates upsert: ${error.message}`)
@@ -177,13 +187,14 @@ export async function runNewsPipeline(sb: SupabaseClient, env: NewsPipelineEnv):
   rawCandidates.push(...secOut.candidates)
 
   const filtered: NewsCandidate[] = []
+  const filteredFp = new Set<string>()
   for (const c of rawCandidates) {
     const reject = shouldRejectCandidate(c.headline, c.excerpt, c.publishedAt, maxAgeHours)
     if (reject) {
       result.prefilterRejected++
       continue
     }
-    if (seen.has(c.fingerprint)) {
+    if (seen.has(c.fingerprint) || filteredFp.has(c.fingerprint)) {
       result.deduped++
       continue
     }
@@ -205,6 +216,7 @@ export async function runNewsPipeline(sb: SupabaseClient, env: NewsPipelineEnv):
       result.deduped++
       continue
     }
+    filteredFp.add(c.fingerprint)
     filtered.push(c)
   }
 
@@ -260,7 +272,8 @@ export async function runNewsPipeline(sb: SupabaseClient, env: NewsPipelineEnv):
     await sleep(600)
   }
 
-  await markSeen(sb, filtered.filter((c) => !toScore.includes(c)))
+  const scoredFp = new Set(toScore.map((c) => c.fingerprint))
+  await markSeen(sb, filtered.filter((c) => !scoredFp.has(c.fingerprint)))
   await saveSecAccessions(sb, secKnown, secOut.newAccessions)
 
   const { error: statsErr } = await sb
