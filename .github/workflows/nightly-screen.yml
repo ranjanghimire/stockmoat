@@ -1,10 +1,11 @@
-# Nightly: `screen_scores` → `screen_charts` → `ticker_next_earnings` (Home next earnings strip).
+# Nightly moat scores → `screen_scores` only.
 #
-# GitHub-hosted jobs hard-cap at 6h. Budgets + gaps below keep each job under ~5h.
-# Charts runs even when screen fails/times out (`if: always()`).
+# Charts and earnings run in separate workflows (no job chaining) so a long or
+# timed-out screen run cannot block them:
+#   nightly-charts.yml   — screen_charts for Charts / Screener
+#   nightly-earnings.yml — ticker_next_earnings for Home
 #
 # Secrets: FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-# Migrations: npx supabase db push
 
 name: Nightly screen
 
@@ -16,13 +17,13 @@ on:
 jobs:
   screen:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 300
     env:
       FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      NIGHTLY_BUDGET: '320'
-      SCREEN_TICKER_GAP_MS: '15000'
+      NIGHTLY_BUDGET: '200'
+      SCREEN_TICKER_GAP_MS: '12000'
       SCREEN_FETCH_PEERS: 'false'
       SCREEN_MAX_TICKERS: '1000'
       SCREEN_OFFSET: '0'
@@ -34,42 +35,3 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run screen:nightly
-
-  charts:
-    needs: screen
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    env:
-      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      NIGHTLY_CHART_BUDGET: '400'
-      SCREEN_CHART_GAP_MS: '8000'
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run screen:charts
-
-  earnings:
-    needs: charts
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    env:
-      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SCREEN_EARNINGS_GAP_MS: '3000'
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run screen:earnings

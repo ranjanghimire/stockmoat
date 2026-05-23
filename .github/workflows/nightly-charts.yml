@@ -1,0 +1,36 @@
+# Nightly FMP OHLC → `screen_charts` (Charts page + Screener popup).
+#
+# Independent of nightly-screen.yml — reads existing `screen_scores` rows and
+# does not wait for tonight's score run to finish.
+#
+# Schedule: 08:00 UTC (after screen starts at 07:15). Second run at 20:00 UTC
+# for backlog catch-up (missing charts prioritized first).
+#
+# Secrets: FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+name: Nightly charts
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+
+jobs:
+  charts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NIGHTLY_CHART_BUDGET: '500'
+      SCREEN_CHART_GAP_MS: '4000'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run screen:charts

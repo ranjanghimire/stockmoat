@@ -1,0 +1,32 @@
+# Nightly next earnings → `ticker_next_earnings` (Home strip).
+#
+# Independent of nightly-screen.yml — uses symbols already in `screen_scores`.
+#
+# Schedule: 08:30 UTC (staggered from charts at 08:00).
+#
+# Secrets: FMP_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+name: Nightly earnings
+
+on:
+  schedule:
+    - cron: '30 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  earnings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SCREEN_EARNINGS_GAP_MS: '2000'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run screen:earnings
