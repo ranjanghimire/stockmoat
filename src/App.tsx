@@ -1,5 +1,6 @@
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import AdminMoatSnapshotPage from './pages/AdminMoatSnapshotPage'
+import BookmarksPage from './pages/BookmarksPage'
 import ChartsPage from './pages/ChartsPage'
 import HomePage from './pages/HomePage'
 import NewsPage from './pages/NewsPage'
@@ -21,6 +22,9 @@ function TopNav() {
         <NavLink to="/charts" className={linkClass}>
           Charts
         </NavLink>
+        <NavLink to="/bookmarks" className={linkClass}>
+          Bookmarks
+        </NavLink>
         <NavLink to="/news" className={linkClass}>
           News
         </NavLink>
@@ -37,6 +41,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/screen" element={<ScreenerPage />} />
         <Route path="/charts" element={<ChartsPage />} />
+        <Route path="/bookmarks" element={<BookmarksPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/admin/moat-snapshot" element={<AdminMoatSnapshotPage />} />
       </Routes>

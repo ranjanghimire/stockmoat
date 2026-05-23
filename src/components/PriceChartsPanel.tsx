@@ -45,7 +45,6 @@ export function PriceChartsPanel({
               <CandlestickChart
                 bars={data.weekly}
                 currency={data.currency}
-                plotCornerLabel={chartsOnly ? ticker : undefined}
               />
               {wFirstLast ? (
                 <div className="flex justify-between text-[10px] text-slate-500">
@@ -65,7 +64,6 @@ export function PriceChartsPanel({
               <CandlestickChart
                 bars={data.daily}
                 currency={data.currency}
-                plotCornerLabel={chartsOnly ? ticker : undefined}
               />
               {dFirstLast ? (
                 <div className="flex justify-between text-[10px] text-slate-500">

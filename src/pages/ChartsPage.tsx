@@ -1,33 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PriceChartsPanel } from '../components/PriceChartsPanel'
+import { ChartGalleryTickerBlock } from '../components/ChartGalleryTickerBlock'
+import { parseChartPanel, type ScoreWithChartRow } from '../lib/screenCharts'
 import { getSupabaseBrowserClient } from '../lib/supabaseClient'
-import type { PriceChartsPayload } from '../lib/yahoo/weeklyChartTypes'
 
 const PAGE_SIZE = 50
-
-function isPriceChartsPayload(v: unknown): v is PriceChartsPayload {
-  if (!v || typeof v !== 'object') return false
-  const o = v as Record<string, unknown>
-  return typeof o.symbol === 'string' && Array.isArray(o.weekly) && Array.isArray(o.daily)
-}
-
-type ChartEmbed = {
-  payload: unknown
-  fetch_error: string | null
-  updated_at?: string
-}
-
-type ScoreWithChartRow = {
-  symbol: string
-  screen_charts: ChartEmbed | ChartEmbed[] | null
-}
-
-function pickEmbeddedChart(row: ScoreWithChartRow): ChartEmbed | null {
-  const c = row.screen_charts
-  if (!c) return null
-  if (Array.isArray(c)) return c[0] ?? null
-  return c
-}
 
 export default function ChartsPage() {
   const [rows, setRows] = useState<ScoreWithChartRow[] | null>(null)
@@ -66,7 +42,7 @@ export default function ChartsPage() {
 
       void sb
         .from('screen_scores')
-        .select('symbol, screen_charts!inner(payload, fetch_error, updated_at)', { count: 'exact' })
+        .select('symbol, display_name, screen_charts!inner(payload, fetch_error, updated_at)', { count: 'exact' })
         .order('score', { ascending: false })
         .range(from, to)
         .then(({ data, error: qErr, count }) => {
@@ -96,20 +72,7 @@ export default function ChartsPage() {
 
   const panels = useMemo(() => {
     if (!rows?.length) return []
-    return rows.map((row) => {
-      const sym = row.symbol
-      const embed = pickEmbeddedChart(row)
-      if (!embed) {
-        return { symbol: sym, data: null as PriceChartsPayload | null, err: 'Missing chart row.' as string | null }
-      }
-      if (embed.fetch_error) {
-        return { symbol: sym, data: null, err: embed.fetch_error }
-      }
-      if (!embed.payload || !isPriceChartsPayload(embed.payload)) {
-        return { symbol: sym, data: null, err: 'Invalid or empty chart payload.' }
-      }
-      return { symbol: sym, data: embed.payload, err: null as string | null }
-    })
+    return rows.map((row) => parseChartPanel(row))
   }, [rows])
 
   return (
@@ -166,14 +129,13 @@ export default function ChartsPage() {
             </div>
 
             <div className="space-y-6">
-              {panels.map(({ symbol, data, err }) => (
-                <PriceChartsPanel
+              {panels.map(({ symbol, displayName, data, err }) => (
+                <ChartGalleryTickerBlock
                   key={symbol}
-                  ticker={symbol}
+                  symbol={symbol}
+                  displayName={displayName}
                   data={data}
-                  loading={false}
                   error={err}
-                  chartsOnly
                 />
               ))}
             </div>
