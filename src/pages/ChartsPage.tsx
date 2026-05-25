@@ -4,6 +4,31 @@ import { parseChartPanel, type ScoreWithChartRow } from '../lib/screenCharts'
 import { getSupabaseBrowserClient } from '../lib/supabaseClient'
 
 const PAGE_SIZE = 50
+const PAGINATION_SIBLINGS = 1
+
+type PaginationItem = number | 'ellipsis'
+
+function getPaginationItems(currentPage: number, totalPages: number): PaginationItem[] {
+  const visiblePages = PAGINATION_SIBLINGS * 2 + 5
+  if (totalPages <= visiblePages) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1)
+  }
+
+  const leftSibling = Math.max(currentPage - PAGINATION_SIBLINGS, 2)
+  const rightSibling = Math.min(currentPage + PAGINATION_SIBLINGS, totalPages - 1)
+  const showLeftEllipsis = leftSibling > 2
+  const showRightEllipsis = rightSibling < totalPages - 1
+
+  if (!showLeftEllipsis && showRightEllipsis) {
+    return [1, 2, 3, 4, 5, 'ellipsis', totalPages]
+  }
+
+  if (showLeftEllipsis && !showRightEllipsis) {
+    return [1, 'ellipsis', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+  }
+
+  return [1, 'ellipsis', leftSibling, currentPage, rightSibling, 'ellipsis', totalPages]
+}
 
 export default function ChartsPage() {
   const [rows, setRows] = useState<ScoreWithChartRow[] | null>(null)
@@ -69,6 +94,7 @@ export default function ChartsPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const rowStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const rowEnd = Math.min(page * PAGE_SIZE, totalCount)
+  const paginationItems = useMemo(() => getPaginationItems(page, totalPages), [page, totalPages])
 
   const panels = useMemo(() => {
     if (!rows?.length) return []
@@ -116,6 +142,33 @@ export default function ChartsPage() {
                   >
                     Previous
                   </button>
+                  <div className="flex flex-wrap items-center gap-1" aria-label="Pagination">
+                    {paginationItems.map((item, index) =>
+                      item === 'ellipsis' ? (
+                        <span
+                          key={`ellipsis-${index}`}
+                          className="px-2 py-1.5 text-sm font-semibold text-slate-400"
+                          aria-hidden="true"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={item}
+                          type="button"
+                          aria-current={item === page ? 'page' : undefined}
+                          onClick={() => setPage(item)}
+                          className={
+                            item === page
+                              ? 'rounded-xl border border-moat-ink bg-moat-ink px-3 py-1.5 text-sm font-semibold text-white shadow-sm'
+                              : 'rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50'
+                          }
+                        >
+                          {item}
+                        </button>
+                      ),
+                    )}
+                  </div>
                   <button
                     type="button"
                     disabled={page >= totalPages}
