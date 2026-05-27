@@ -53,19 +53,34 @@ function asOfFromRows(rows: JsonRecord[]): string | undefined {
 }
 
 /**
- * Last completed fiscal year from annual income (FMP list is newest-first).
+ * Newest fiscal year on the annual income list (FMP list is newest-first).
  */
 export function lastActualFiscalYearFromIncome(incomeAnnual: JsonRecord[]): number | undefined {
   const row = incomeAnnual[0]
   if (!row) return undefined
-  let y = pick(row, ['calendarYear', 'fiscalYear'])
-  if (y !== undefined) return Math.round(y)
-  const d = row.date
-  if (typeof d === 'string' && d.length >= 4) {
-    const n = Number(d.slice(0, 4))
-    if (Number.isFinite(n)) return n
-  }
-  return undefined
+  const y = fiscalYearFromRow(row)
+  return y !== undefined ? Math.round(y) : undefined
+}
+
+/**
+ * Last fully reported fiscal year. If the newest annual row is an in-progress year
+ * (< 4 reported quarters), uses the prior annual row instead.
+ */
+export function lastCompletedFiscalYearFromIncome(
+  incomeAnnual: JsonRecord[],
+  incomeQuarterly: JsonRecord[] = [],
+): number | undefined {
+  const newestFy = lastActualFiscalYearFromIncome(incomeAnnual)
+  if (newestFy === undefined) return undefined
+
+  const reportedQuarters = quarterlyMetricMapsForYear(incomeQuarterly, newestFy, 'actual').size
+  if (reportedQuarters >= 4) return newestFy
+
+  const priorRow = incomeAnnual[1]
+  const priorFy = priorRow ? fiscalYearFromRow(priorRow) : undefined
+  if (priorFy !== undefined && priorFy < newestFy) return Math.round(priorFy)
+
+  return newestFy
 }
 
 export interface ParseForwardEstimatesOptions {
@@ -484,7 +499,7 @@ export function buildForwardGrowthChartsFromPack(
   incomeQuarterly: JsonRecord[] = [],
   analystQuarterly: JsonRecord[] = [],
 ): ForwardGrowthCharts | undefined {
-  const lastActual = lastActualFiscalYearFromIncome(incomeAnnual)
+  const lastActual = lastCompletedFiscalYearFromIncome(incomeAnnual, incomeQuarterly)
 
   if (lastActual === undefined) {
     const series = parseForwardEstimatesFromFmp(symbol, analystRows, { maxYears: FORWARD_GROWTH_FORWARD_YEARS })

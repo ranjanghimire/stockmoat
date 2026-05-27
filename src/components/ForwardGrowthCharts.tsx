@@ -12,6 +12,8 @@ function formatUsd(n: number): string {
   return `${sign}$${abs.toFixed(0)}`
 }
 
+const MIN_BAR_PERCENT = 14
+
 function barPercents(values: Array<number | undefined>): number[] {
   const nums = values.filter((v): v is number => v !== undefined && Number.isFinite(v))
   if (nums.length === 0) return values.map(() => 0)
@@ -20,7 +22,9 @@ function barPercents(values: Array<number | undefined>): number[] {
   const span = hi - lo || 1
   return values.map((v) => {
     if (v === undefined || !Number.isFinite(v)) return 0
-    return ((v - lo) / span) * 100
+    const pct = ((v - lo) / span) * 100
+    if (v > 0) return Math.max(pct, MIN_BAR_PERCENT)
+    return pct
   })
 }
 
@@ -34,17 +38,18 @@ function yoyPct(cur?: number, prev?: number): string | undefined {
 }
 
 function barClassForPoint(point: ForwardGrowthChartPoint, estimateMetricClass: string): string {
+  const base = 'forward-growth-chart__bar'
   if (point.kind === 'actual') {
     return estimateMetricClass.includes('eps')
-      ? 'forward-growth-chart__bar--actual forward-growth-chart__bar--eps'
-      : 'forward-growth-chart__bar--actual'
+      ? `${base} forward-growth-chart__bar--actual forward-growth-chart__bar--eps`
+      : `${base} forward-growth-chart__bar--actual`
   }
   if (point.kind === 'projected') {
     return estimateMetricClass.includes('eps')
-      ? 'forward-growth-chart__bar--projected forward-growth-chart__bar--eps'
-      : 'forward-growth-chart__bar--projected'
+      ? `${base} forward-growth-chart__bar--projected forward-growth-chart__bar--eps`
+      : `${base} forward-growth-chart__bar--projected`
   }
-  return `forward-growth-chart__bar ${estimateMetricClass}`.trim()
+  return `${base} ${estimateMetricClass}`.trim()
 }
 
 function ForwardBarGroup({

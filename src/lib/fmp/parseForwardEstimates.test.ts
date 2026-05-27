@@ -5,6 +5,7 @@ import {
   formatForwardEstimatesBlock,
   forwardEstimatesToGrowthCharts,
   lastActualFiscalYearFromIncome,
+  lastCompletedFiscalYearFromIncome,
   parseForwardEstimatesFromFmp,
   projectInProgressFiscalYearFromQuarters,
 } from './parseForwardEstimates'
@@ -74,6 +75,16 @@ describe('parseForwardEstimatesFromFmp', () => {
       minForwardFiscalYear: 2027,
     })
     expect(series.revenue.map((p) => p.fiscalYear)).toEqual([2027, 2028, 2029])
+  })
+
+  it('lastCompletedFiscalYearFromIncome skips in-progress top annual year', () => {
+    const annual = [
+      { calendarYear: 2026, revenue: 50e9 },
+      { calendarYear: 2025, revenue: 201e9 },
+    ]
+    const quarterly = [{ calendarYear: 2026, period: 'Q1', revenue: 50e9 }]
+    expect(lastActualFiscalYearFromIncome(annual)).toBe(2026)
+    expect(lastCompletedFiscalYearFromIncome(annual, quarterly)).toBe(2025)
   })
 
   it('projectInProgressFiscalYearFromQuarters sums actual + estimate quarters', () => {
