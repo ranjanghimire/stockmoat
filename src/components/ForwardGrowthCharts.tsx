@@ -51,32 +51,33 @@ function ForwardBarGroup({
   const heights = useMemo(() => barPercents(values), [values])
 
   return (
-    <div className="rounded-xl border border-sky-200/80 bg-white/70 p-4 shadow-inner backdrop-blur">
+    <div className="forward-growth-chart__card">
       <h4 className="text-sm font-semibold text-moat-ink">{title}</h4>
-      <div className="mt-3 flex h-36 items-end gap-1.5 sm:gap-2">
+      <div className="forward-growth-chart__plot">
         {points.map((p, i) => {
           const v = values[i]
           const h = heights[i] ?? 0
           const has = v !== undefined && Number.isFinite(v)
-          const barRem = has ? Math.max(0.25, (h / 100) * 9) : 0.2
+          const barRem = has ? Math.max(0.25, (h / 100) * 7.5) : 0.2
           const prev = i > 0 ? values[i - 1] : undefined
           const yoy = yoyPct(v, prev)
           const analysts = analystLabel?.(p)
           return (
-            <div
-              key={`${p.fiscalYear}-${title}`}
-              className="flex h-36 min-w-0 flex-1 flex-col items-center justify-end gap-1"
-            >
-              <div
-                className={`forward-growth-chart__bar w-full max-w-[3rem] rounded-t-md transition ${barClassName}`}
-                style={{ height: `${barRem}rem` }}
-                title={[p.label, formatValue(v), yoy, analysts].filter(Boolean).join(' · ')}
-              />
-              <span className="max-w-full truncate text-center text-[10px] font-semibold text-sky-900" title={p.label}>
-                {p.label}
-              </span>
-              <span className="max-w-full truncate text-center text-[10px] text-slate-600">{formatValue(v)}</span>
-              {yoy ? <span className="text-center text-[9px] font-medium text-slate-500">{yoy}</span> : null}
+            <div key={`${p.fiscalYear}-${title}`} className="forward-growth-chart__column">
+              <div className="forward-growth-chart__bar-area">
+                <div
+                  className={`forward-growth-chart__bar ${barClassName}`}
+                  style={{ height: `${barRem}rem` }}
+                  title={[p.label, formatValue(v), yoy, analysts].filter(Boolean).join(' · ')}
+                />
+              </div>
+              <div className="forward-growth-chart__labels">
+                <span className="forward-growth-chart__label-year" title={p.label}>
+                  {p.label}
+                </span>
+                <span className="forward-growth-chart__label-value">{formatValue(v)}</span>
+                {yoy ? <span className="forward-growth-chart__label-yoy">{yoy}</span> : null}
+              </div>
             </div>
           )
         })}
@@ -107,7 +108,7 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
   const epsValues = points.map((p) => p.eps)
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-sky-200/60 bg-gradient-to-b from-sky-50/50 to-white/90 shadow-lg shadow-slate-900/5 backdrop-blur">
+    <section className="rounded-2xl border border-sky-200/60 bg-gradient-to-b from-sky-50/50 to-white/90 shadow-lg shadow-slate-900/5 backdrop-blur">
       <div className="flex flex-col gap-2 border-b border-sky-100/90 bg-sky-50/60 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
