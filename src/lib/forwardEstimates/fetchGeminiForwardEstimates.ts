@@ -1,15 +1,17 @@
 import type { ForwardEstimatesSeries } from '../fmp/parseForwardEstimates'
 import { DEFAULT_GEMINI_NEWS_MODEL } from '../news/geminiScore'
+import {
+  geminiTextFromGenerateContentResponse,
+  parseGeminiForwardJsonText,
+  type GeminiForwardEstimatesJson,
+} from './parseGeminiForwardJson'
+
+export type { GeminiForwardEstimatesJson }
 
 const GEMINI_ROOT = 'https://generativelanguage.googleapis.com/v1beta'
 
 /** Same default as news pipeline; override with GEMINI_MODEL env or options.model. */
 export const DEFAULT_GEMINI_FORWARD_MODEL = DEFAULT_GEMINI_NEWS_MODEL
-
-export interface GeminiForwardEstimatesJson {
-  revenue: Array<{ fy: number; value_usd: number }>
-  eps: Array<{ fy: number; value: number }>
-}
 
 const SYSTEM = `You are an equity research data extractor. Return ONLY valid JSON, no markdown.
 
@@ -33,22 +35,6 @@ function buildUserPrompt(ticker: string, companyName: string, lastActualFy?: num
   return `Company: ${companyName} (${ticker}).${tail}
 
 Output the next up to 3 fiscal years of analyst consensus revenue (value_usd) and EPS (value) as JSON matching the schema.`
-}
-
-function parseGeminiJson(text: string): GeminiForwardEstimatesJson {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    const m = text.match(/\{[\s\S]*\}/)
-    if (!m) throw new Error('Gemini forward estimates: JSON parse failed')
-    parsed = JSON.parse(m[0])
-  }
-  if (!parsed || typeof parsed !== 'object') throw new Error('Gemini forward estimates: expected object')
-  const o = parsed as GeminiForwardEstimatesJson
-  if (!Array.isArray(o.revenue)) o.revenue = []
-  if (!Array.isArray(o.eps)) o.eps = []
-  return o
 }
 
 export function forwardSeriesFromGeminiJson(
@@ -79,6 +65,15 @@ export async function fetchGeminiForwardEstimates(
   const model = options?.model ?? DEFAULT_GEMINI_FORWARD_MODEL
   const url = `${GEMINI_ROOT}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
 
+  const generationConfig: Record<string, unknown> = {
+    temperature: 0.1,
+    maxOutputTokens: 2048,
+    responseMimeType: 'application/json',
+  }
+  if (model.includes('2.5')) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 }
+  }
+
   const body = {
     contents: [
       {
@@ -86,11 +81,7 @@ export async function fetchGeminiForwardEstimates(
         parts: [{ text: `${SYSTEM}\n\n${buildUserPrompt(ticker, companyName, options?.lastActualFiscalYear)}` }],
       },
     ],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 1024,
-      responseMimeType: 'application/json',
-    },
+    generationConfig,
   }
 
   const res = await fetch(url, {
@@ -104,12 +95,22 @@ export async function fetchGeminiForwardEstimates(
     throw new Error(`Gemini forward estimates failed (${res.status}): ${errText.slice(0, 300)}`)
   }
 
-  const raw = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[]
+  const raw = (await res.json()) as Parameters<typeof geminiTextFromGenerateContentResponse>[0]
+  const text = geminiTextFromGenerateContentResponse(raw)
+  if (!text) {
+    const reason = raw.candidates?.[0] && 'finishReason' in raw.candidates[0]
+      ? String((raw.candidates[0] as { finishReason?: string }).finishReason)
+      : 'unknown'
+    throw new Error(`Gemini forward estimates: empty response (finishReason=${reason})`)
   }
-  const text = (raw.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim()
-  if (!text) throw new Error('Gemini forward estimates: empty response')
 
-  const json = parseGeminiJson(text)
-  return forwardSeriesFromGeminiJson(ticker, json)
+  try {
+    const json = parseGeminiForwardJsonText(text)
+    return forwardSeriesFromGeminiJson(ticker, json)
+  } catch (e) {
+    if (process.env.SPIKE_DEBUG_GEMINI === '1' || process.env.GEMINI_DEBUG === '1') {
+      console.error('[gemini forward] raw text (first 4000 chars):', text.slice(0, 4000))
+    }
+    throw e
+  }
 }
