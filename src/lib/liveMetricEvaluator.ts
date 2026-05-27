@@ -310,7 +310,11 @@ export function createLiveMetricEvaluator(
             subscore: 0.45,
             gatePass: true,
             displayValue: 'PEG unavailable.',
-            breakdown: ['PEG from FMP key-metrics / ratios TTM when present.', 'PEG needs positive P/E and growth; many value names omit it.'],
+            breakdown: [
+              'PEG from FMP key-metrics / ratios TTM (incl. priceEarningsToGrowthRatioTTM aliases) when present.',
+              'When absent, computed as trailing P/E ÷ EPS growth % from FMP growth fields, annual EPS YoY, or analyst estimates.',
+              'PEG needs positive P/E and growth; many value names omit it.',
+            ],
           }
         }
         const sub = clamp(1 - peg / 2.5, 0, 1)
