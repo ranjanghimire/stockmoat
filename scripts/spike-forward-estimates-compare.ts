@@ -34,6 +34,7 @@ function envKey(...names: string[]): string {
 
 const fmpKey = envKey('fmpApiKey', 'FMP_API_KEY', 'VITE_FMP_API_KEY')
 const geminiKey = envKey('GEMINI_API_KEY')
+const geminiModel = envKey('GEMINI_MODEL') || undefined
 
 const tickers = process.argv.slice(2).map((t) => t.toUpperCase())
 if (tickers.length === 0) tickers.push('META', 'AAPL', 'PLTR')
@@ -67,6 +68,7 @@ async function main() {
     const resolved = await resolveForwardEstimates(sym, pack, facts, {
       fmpApiKey: fmpKey,
       geminiApiKey: geminiKey || undefined,
+      geminiModel,
       estimateLimit: 10,
     })
 
@@ -78,6 +80,7 @@ async function main() {
       try {
         const geminiSeries = await fetchGeminiForwardEstimates(sym, facts.companyName, geminiKey, {
           lastActualFiscalYear: lastActual,
+          model: geminiModel,
         })
         console.log('\n--- Gemini (JSON → series) ---')
         console.log(formatForwardEstimatesBlock(facts.companyName, geminiSeries))

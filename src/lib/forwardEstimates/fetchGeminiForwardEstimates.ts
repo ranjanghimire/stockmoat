@@ -1,6 +1,10 @@
 import type { ForwardEstimatesSeries } from '../fmp/parseForwardEstimates'
+import { DEFAULT_GEMINI_NEWS_MODEL } from '../news/geminiScore'
 
 const GEMINI_ROOT = 'https://generativelanguage.googleapis.com/v1beta'
+
+/** Same default as news pipeline; override with GEMINI_MODEL env or options.model. */
+export const DEFAULT_GEMINI_FORWARD_MODEL = DEFAULT_GEMINI_NEWS_MODEL
 
 export interface GeminiForwardEstimatesJson {
   revenue: Array<{ fy: number; value_usd: number }>
@@ -72,7 +76,7 @@ export async function fetchGeminiForwardEstimates(
   apiKey: string,
   options?: { model?: string; lastActualFiscalYear?: number; signal?: AbortSignal },
 ): Promise<ForwardEstimatesSeries> {
-  const model = options?.model ?? 'gemini-2.0-flash'
+  const model = options?.model ?? DEFAULT_GEMINI_FORWARD_MODEL
   const url = `${GEMINI_ROOT}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
 
   const body = {

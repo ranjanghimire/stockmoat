@@ -7,7 +7,7 @@ import {
   type ForwardEstimatesSeries,
 } from '../fmp/parseForwardEstimates'
 import { asArray, type JsonRecord } from '../fmp/normalize'
-import { fetchGeminiForwardEstimates } from './fetchGeminiForwardEstimates'
+import { DEFAULT_GEMINI_FORWARD_MODEL, fetchGeminiForwardEstimates } from './fetchGeminiForwardEstimates'
 
 export interface ResolveForwardEstimatesOptions {
   fmpApiKey: string
@@ -103,7 +103,7 @@ export async function resolveForwardEstimates(
 
   try {
     const geminiSeries = await fetchGeminiForwardEstimates(sym, facts.companyName, geminiKey, {
-      model: opts.geminiModel,
+      model: opts.geminiModel ?? DEFAULT_GEMINI_FORWARD_MODEL,
       lastActualFiscalYear: lastActual,
       signal: opts.signal,
     })
