@@ -82,6 +82,21 @@ describe('parseForwardEstimatesFromFmp', () => {
     vi.useRealTimers()
   })
 
+  it('buckets income quarters by period-end calendar year, not fiscal label alone', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'))
+    const income = [
+      { fiscalYear: '2027', period: 'Q1', date: '2026-04-26', revenue: 80, epsdiluted: 2.4 },
+      { fiscalYear: '2026', period: 'Q4', date: '2026-01-25', revenue: 68, epsdiluted: 2.0 },
+      { fiscalYear: '2026', period: 'Q3', date: '2025-10-26', revenue: 57, epsdiluted: 1.5 },
+      { fiscalYear: '2026', period: 'Q2', date: '2025-07-27', revenue: 46, epsdiluted: 1.2 },
+    ]
+    const projected = projectInProgressFiscalYearFromQuarters(2026, income, [], [])
+    expect(projected?.projectionNote).not.toContain('4 reported')
+    expect(projected?.projectionNote).toContain('2 reported')
+    vi.useRealTimers()
+  })
+
   it('ignores income rows for quarters that have not ended yet', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-26T12:00:00Z'))

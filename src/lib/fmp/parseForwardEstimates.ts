@@ -384,7 +384,12 @@ function quarterlyMetricMapsForChartYear(
     const fy = fiscalYearFromRow(row)
     const q = normalizeQuarterPeriod(row)
     if (!q) continue
-    if (y !== chartYear && fy !== chartYear) continue
+    // Prefer period-end calendar year so prior-FY quarters (e.g. NVDA Q2–Q3 dated in 2025) do not land on the current chart year.
+    if (y !== undefined) {
+      if (y !== chartYear) continue
+    } else if (fy !== chartYear) {
+      continue
+    }
 
     const revenueUsd =
       kind === 'actual'
@@ -649,8 +654,9 @@ export function preferPackBuiltForwardGrowth(
   fromCache: ForwardGrowthCharts | undefined,
   fromPack: ForwardGrowthCharts | undefined,
 ): ForwardGrowthCharts | undefined {
+  const cached = forwardGrowthChartsComplete(fromCache) ? fromCache : undefined
   if (forwardGrowthChartsComplete(fromPack)) return fromPack
-  if (forwardGrowthChartsComplete(fromCache)) return fromCache
+  if (cached) return cached
   if (forwardGrowthChartsUsable(fromPack)) return fromPack
   if (forwardGrowthChartsUsable(fromCache)) return fromCache
   return undefined

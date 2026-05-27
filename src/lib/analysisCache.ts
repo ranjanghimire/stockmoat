@@ -16,7 +16,7 @@ export function analysisCacheKey(
   const profilePart = profileMode === 'manual' ? manualProfile : 'auto'
   const peersOn = !useYahoo && shouldFetchFmpPeerMedians() ? '1' : '0'
   /** Bump when fundamentals payload shape changes (invalidates stale in-memory cache). */
-  const fundamentalsSchema = 'fg6'
+  const fundamentalsSchema = 'fg7'
   return `${sym}|${useYahoo ? 'Y' : 'F'}|${profileMode}|${profilePart}|p${peersOn}|${fundamentalsSchema}`
 }
 

@@ -8,8 +8,8 @@ import { asArray, firstRow, type JsonRecord } from './normalize'
 
 /** FMP free/starter plans reject `limit` > 5 on statement endpoints (402). */
 const FMP_ANNUAL_STATEMENT_LIMIT = 5
-/** Analyst estimates often need more rows to cover 3 forward FYs after filtering actuals. */
-export const FMP_ANALYST_ESTIMATES_LIMIT = 24
+/** FMP starter plans reject analyst-estimates `limit` > 10 (402). */
+export const FMP_ANALYST_ESTIMATES_LIMIT = 10
 
 export interface CompanyRawPack {
   profile: JsonRecord | undefined

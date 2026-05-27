@@ -9,6 +9,8 @@ import { fetchCompanyRawPack } from './fetchCompanyRawPack'
 import { compareForwardSeries, summarizeCompare } from '../forwardEstimates/compareForwardEstimates'
 import { fetchGeminiForwardEstimates } from '../forwardEstimates/fetchGeminiForwardEstimates'
 import {
+  buildForwardGrowthChartsFromPack,
+  forwardGrowthChartsComplete,
   lastActualFiscalYearFromIncome,
   parseForwardEstimatesFromFmp,
 } from './parseForwardEstimates'
@@ -45,6 +47,23 @@ describe.skipIf(!fmpKey)('FMP forward estimates (integration)', () => {
 
     expect(sum.maxAbsPctDiff, JSON.stringify(cmp, null, 2)).toBeLessThan(8)
   }, 90_000)
+
+  it('NVDA: five-year forward growth chart includes three consensus years', async () => {
+    const sym = 'NVDA'
+    const pack = await fetchCompanyRawPack(sym, fmpKey)
+    expect(pack.analystEstimates.length, 'analyst-estimates limit must fit FMP plan').toBeGreaterThan(0)
+
+    const charts = buildForwardGrowthChartsFromPack(
+      sym,
+      pack.analystEstimates,
+      pack.incomeAnnual,
+      pack.incomeQuarterly,
+      pack.analystEstimatesQuarterly ?? [],
+    )
+    expect(forwardGrowthChartsComplete(charts)).toBe(true)
+    expect(charts?.points.map((p) => p.fiscalYear)).toEqual([2025, 2026, 2027, 2028, 2029])
+    expect(charts?.points.filter((p) => p.kind === 'estimate').length).toBe(3)
+  }, 60_000)
 
   it('AAPL: FMP returns at least two forward fiscal years', async () => {
     const sym = 'AAPL'
