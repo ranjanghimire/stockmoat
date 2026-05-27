@@ -19,6 +19,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:unit": "vitest run --config vitest.config.ts",
     "spike:forward-estimates": "vite-node scripts/spike-forward-estimates-compare.ts",
+    "spike:forward": "npm run spike:forward-estimates --",
     "test:forward-estimates": "vitest run --config vitest.integration.config.ts src/lib/fmp/parseForwardEstimates.integration.test.ts"
   },
   "dependencies": {
