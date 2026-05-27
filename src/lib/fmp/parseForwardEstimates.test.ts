@@ -59,6 +59,16 @@ describe('parseForwardEstimatesFromFmp', () => {
     })
   })
 
+  it('resolveGrowthChartYears uses calendar anchor when quarters exist for current year', () => {
+    const cy = new Date().getUTCFullYear()
+    const quarters = [
+      { calendarYear: cy, period: 'Q1', date: `${cy}-03-31`, revenue: 1 },
+      { calendarYear: cy, period: 'Q2', date: `${cy}-06-30`, revenue: 2 },
+    ]
+    const years = resolveGrowthChartYears([{ calendarYear: cy, revenue: 99 }], quarters)
+    expect(years).toEqual({ completed: cy - 1, inProgress: cy })
+  })
+
   it('projectInProgressFiscalYearFromQuarters sums four quarters (NVDA-style)', () => {
     const projected = projectInProgressFiscalYearFromQuarters(2026, [NVDA_Q1], NVDA_Q_EST_2026)
     expect(projected?.eps).toBeCloseTo(11.4, 2)

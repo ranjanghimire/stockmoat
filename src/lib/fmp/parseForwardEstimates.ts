@@ -97,9 +97,15 @@ export function resolveGrowthChartYears(
   incomeAnnual: JsonRecord[],
   incomeQuarterly: JsonRecord[] = [],
 ): { completed: number; inProgress: number } | undefined {
-  const inProgress = detectInProgressChartYear(incomeQuarterly)
-  if (inProgress !== undefined) {
-    return { completed: inProgress - 1, inProgress }
+  const inProgressPartial = detectInProgressChartYear(incomeQuarterly)
+  if (inProgressPartial !== undefined) {
+    return { completed: inProgressPartial - 1, inProgress: inProgressPartial }
+  }
+
+  const calendarYear = new Date().getUTCFullYear()
+  const quartersThisCalendarYear = countReportedQuartersForChartYear(incomeQuarterly, calendarYear)
+  if (quartersThisCalendarYear > 0) {
+    return { completed: calendarYear - 1, inProgress: calendarYear }
   }
 
   const newest = incomeAnnual[0]
@@ -107,13 +113,9 @@ export function resolveGrowthChartYears(
   const newestY = chartYearFromRow(newest)
   if (newestY === undefined) return undefined
 
-  if (countReportedQuartersForChartYear(incomeQuarterly, newestY) >= 4) {
-    return { completed: newestY, inProgress: newestY + 1 }
-  }
-
   const prior = incomeAnnual[1]
   const priorY = prior ? chartYearFromRow(prior) : undefined
-  if (priorY !== undefined) {
+  if (priorY !== undefined && priorY < newestY) {
     return { completed: priorY, inProgress: priorY + 1 }
   }
 
@@ -187,7 +189,7 @@ export function parseForwardEstimatesFromFmp(
   >()
 
   for (const row of analystRows) {
-    const y = fiscalYearFromRow(row)
+    const y = chartYearFromRow(row)
     if (y === undefined) continue
     if (minForward !== undefined) {
       if (y < minForward) continue
@@ -519,6 +521,39 @@ function annualConsensusForChartYear(
   return undefined
 }
 
+function appendForwardConsensusPoints(
+  points: ForwardGrowthChartPoint[],
+  symbol: string,
+  analystRows: JsonRecord[],
+  minForward: number,
+  inProgressYear: number,
+): void {
+  const hasForward = points.some((p) => p.kind === 'estimate' && p.fiscalYear >= minForward)
+  if (hasForward) return
+
+  let series = parseForwardEstimatesFromFmp(symbol, analystRows, {
+    maxYears: FORWARD_GROWTH_FORWARD_YEARS,
+    minForwardFiscalYear: minForward,
+  })
+  let forward = forwardEstimatesToGrowthCharts(series)
+
+  if (!forward?.points?.length) {
+    series = parseForwardEstimatesFromFmp(symbol, analystRows, {
+      maxYears: FORWARD_GROWTH_FORWARD_YEARS,
+      lastActualFiscalYear: inProgressYear,
+    })
+    forward = forwardEstimatesToGrowthCharts(series)
+  }
+
+  if (!forward?.points?.length) return
+
+  const existingYears = new Set(points.map((p) => p.fiscalYear))
+  for (const p of forward.points) {
+    if (existingYears.has(p.fiscalYear)) continue
+    points.push(p)
+  }
+}
+
 function buildFiveYearGrowthCharts(
   symbol: string,
   incomeAnnual: JsonRecord[],
@@ -577,19 +612,14 @@ function buildFiveYearGrowthCharts(
     }
   }
 
-  const series = parseForwardEstimatesFromFmp(symbol, analystRows, {
-    maxYears: FORWARD_GROWTH_FORWARD_YEARS,
-    minForwardFiscalYear: minForward,
-  })
-  const forward = forwardEstimatesToGrowthCharts(series)
-  if (forward?.points) {
-    for (const p of forward.points) {
-      points.push(p)
-    }
-  }
+  appendForwardConsensusPoints(points, symbol, analystRows, minForward, inProgressYear)
 
   if (points.length === 0) return undefined
-  return { symbol: symbol.toUpperCase(), points, asOf: series.asOf ?? asOfFromRows(analystQuarterly) }
+  return {
+    symbol: symbol.toUpperCase(),
+    points,
+    asOf: asOfFromRows(analystRows) ?? asOfFromRows(analystQuarterly),
+  }
 }
 
 export function forwardGrowthChartsUsable(charts: ForwardGrowthCharts | null | undefined): boolean {
