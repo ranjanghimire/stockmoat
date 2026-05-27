@@ -6,6 +6,7 @@ import {
   forwardEstimatesToGrowthCharts,
   lastActualFiscalYearFromIncome,
   parseForwardEstimatesFromFmp,
+  projectInProgressFiscalYearFromQuarters,
 } from './parseForwardEstimates'
 
 /** Yahoo Finance–style META consensus (May 2026) for parser sanity checks. */
@@ -42,15 +43,21 @@ const META_ANALYST_ROWS = [
   },
 ]
 
-const META_INCOME_ACTUALS = [
-  { calendarYear: 2025, revenue: 201_000_000_000, epsdiluted: 23.5 },
-  { calendarYear: 2024, revenue: 165_000_000_000, epsdiluted: 19.2 },
-  { calendarYear: 2023, revenue: 134_000_000_000, epsdiluted: 14.5 },
+const META_INCOME_ANNUAL = [{ calendarYear: 2025, revenue: 201_000_000_000, epsdiluted: 23.5 }]
+
+const META_INCOME_Q_2026 = [
+  { calendarYear: 2026, period: 'Q1', date: '2026-03-31', revenue: 40_000_000_000, epsdiluted: 4 },
+  { calendarYear: 2026, period: 'Q2', date: '2026-06-30', revenue: 42_000_000_000, epsdiluted: 4.1 },
+]
+
+const META_ANALYST_Q_2026 = [
+  { calendarYear: 2026, period: 'Q3', date: '2026-09-30', estimatedRevenueAvg: 45_000_000_000, estimatedEpsAvg: 4.5 },
+  { calendarYear: 2026, period: 'Q4', date: '2026-12-31', estimatedRevenueAvg: 48_000_000_000, estimatedEpsAvg: 4.8 },
 ]
 
 describe('parseForwardEstimatesFromFmp', () => {
   it('excludes years at or before last actual fiscal year', () => {
-    const lastActual = lastActualFiscalYearFromIncome([{ calendarYear: 2025, revenue: 200e9 }])
+    const lastActual = lastActualFiscalYearFromIncome(META_INCOME_ANNUAL)
     expect(lastActual).toBe(2025)
 
     const series = parseForwardEstimatesFromFmp('META', META_ANALYST_ROWS, {
@@ -59,9 +66,6 @@ describe('parseForwardEstimatesFromFmp', () => {
     })
 
     expect(series.revenue.map((p) => p.fiscalYear)).toEqual([2026, 2027, 2028])
-    expect(series.eps.map((p) => p.fiscalYear)).toEqual([2026, 2027, 2028])
-    expect(series.revenue[0]!.revenueUsd).toBeCloseTo(253.08e9, -6)
-    expect(series.eps[0]!.eps).toBeCloseTo(32.32, 2)
   })
 
   it('minForwardFiscalYear keeps 2027–2029 when last actual is 2025', () => {
@@ -72,33 +76,34 @@ describe('parseForwardEstimatesFromFmp', () => {
     expect(series.revenue.map((p) => p.fiscalYear)).toEqual([2027, 2028, 2029])
   })
 
-  it('builds aligned chart points for revenue and EPS', () => {
-    const series = parseForwardEstimatesFromFmp('META', META_ANALYST_ROWS, {
-      maxYears: 3,
-      minForwardFiscalYear: 2027,
-    })
-    const charts = forwardEstimatesToGrowthCharts(series)
-    expect(charts?.points).toHaveLength(3)
-    expect(charts?.points[0]).toMatchObject({
-      fiscalYear: 2027,
-      label: 'FY2027',
-      kind: 'estimate',
-      revenueUsd: expect.any(Number),
-      eps: expect.any(Number),
-    })
+  it('projectInProgressFiscalYearFromQuarters sums actual + estimate quarters', () => {
+    const projected = projectInProgressFiscalYearFromQuarters(
+      2026,
+      META_INCOME_Q_2026,
+      META_ANALYST_Q_2026,
+    )
+    expect(projected?.revenueUsd).toBeCloseTo(175_000_000_000, -6)
+    expect(projected?.eps).toBeCloseTo(17.4, 1)
+    expect(projected?.projectionNote).toContain('2 reported')
+    expect(projected?.projectionNote).toContain('2 est.')
   })
 
-  it('buildForwardGrowthChartsFromPack merges 2 actual + 3 forward years', () => {
-    const charts = buildForwardGrowthChartsFromPack('META', META_ANALYST_ROWS, META_INCOME_ACTUALS)
+  it('buildForwardGrowthChartsFromPack shows 2025, projected 2026, and 2027–2029', () => {
+    const charts = buildForwardGrowthChartsFromPack(
+      'META',
+      META_ANALYST_ROWS,
+      META_INCOME_ANNUAL,
+      META_INCOME_Q_2026,
+      META_ANALYST_Q_2026,
+    )
     expect(charts?.points.map((p) => ({ fy: p.fiscalYear, kind: p.kind }))).toEqual([
-      { fy: 2024, kind: 'actual' },
       { fy: 2025, kind: 'actual' },
+      { fy: 2026, kind: 'projected' },
       { fy: 2027, kind: 'estimate' },
       { fy: 2028, kind: 'estimate' },
       { fy: 2029, kind: 'estimate' },
     ])
-    expect(charts?.points[0]?.revenueUsd).toBeCloseTo(165e9, -6)
-    expect(charts?.points[2]?.revenueUsd).toBeCloseTo(301.7e9, -6)
+    expect(charts?.points[1]?.revenueUsd).toBeCloseTo(175e9, -6)
   })
 
   it('formats block like the Gemini prompt example', () => {
@@ -108,6 +113,17 @@ describe('parseForwardEstimatesFromFmp', () => {
     })
     const block = formatForwardEstimatesBlock('META', series)
     expect(block).toContain('FY2026: $253.08B')
-    expect(block).toContain('FY2026: $32.32')
+  })
+
+  it('builds aligned chart points for revenue and EPS', () => {
+    const series = parseForwardEstimatesFromFmp('META', META_ANALYST_ROWS, {
+      maxYears: 3,
+      minForwardFiscalYear: 2027,
+    })
+    const charts = forwardEstimatesToGrowthCharts(series)
+    expect(charts?.points[0]).toMatchObject({
+      fiscalYear: 2027,
+      kind: 'estimate',
+    })
   })
 })

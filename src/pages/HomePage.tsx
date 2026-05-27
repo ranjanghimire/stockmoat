@@ -14,7 +14,11 @@ import { DELAYED_PRICE_SNAPSHOT_TTL_MS } from '../lib/delayedPricePolicy'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource'
 import { buildCompanyFacts, listingCurrencyFromPack } from '../lib/fmp/buildCompanyFacts'
 import type { CompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
-import { fetchAnalystEstimatesAnnual, fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
+import {
+  fetchAnalystEstimatesAnnual,
+  fetchAnalystEstimatesQuarterly,
+  fetchCompanyRawPack,
+} from '../lib/fmp/fetchCompanyRawPack'
 import {
   fetchHomeFmpBundleViaEdge,
   forwardGrowthNeedsBackgroundRefresh,
@@ -310,8 +314,17 @@ export default function HomePage() {
         fmpKey &&
         pack.incomeAnnual.length > 0
       ) {
-        void fetchAnalystEstimatesAnnual(sym, fmpKey).then((rows) => {
-          const charts = buildForwardGrowthChartsFromPack(sym, rows, pack.incomeAnnual)
+        void Promise.all([
+          fetchAnalystEstimatesAnnual(sym, fmpKey),
+          fetchAnalystEstimatesQuarterly(sym, fmpKey),
+        ]).then(([rows, quarterlyRows]) => {
+          const charts = buildForwardGrowthChartsFromPack(
+            sym,
+            rows,
+            pack.incomeAnnual,
+            pack.incomeQuarterly,
+            quarterlyRows,
+          )
           if (!charts || !forwardGrowthChartsUsable(charts)) return
           setAnalysis((prev) => {
             if (!prev || prev.ticker.toUpperCase() !== sym || !prev.fundamentals) return prev

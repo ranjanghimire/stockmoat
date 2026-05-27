@@ -20,6 +20,22 @@
   background: linear-gradient(180deg, #a8a29e 0%, #78716c 100%);
 }
 
+.forward-growth-chart__bar--projected {
+  background: linear-gradient(180deg, #fcd34d 0%, #d97706 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%);
+}
+
+.forward-growth-chart__bar--projected.forward-growth-chart__bar--eps {
+  background: linear-gradient(180deg, #fdba74 0%, #ea580c 100%);
+}
+
+.forward-growth-chart__label-note {
+  text-align: center;
+  font-size: 0.5rem;
+  line-height: 1.3;
+  color: #b45309;
+}
+
 .forward-growth-chart__legend {
   display: flex;
   flex-wrap: wrap;
@@ -51,6 +67,10 @@
 
 .forward-growth-chart__legend-swatch--eps {
   background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+}
+
+.forward-growth-chart__legend-swatch--projected {
+  background: linear-gradient(180deg, #fcd34d 0%, #d97706 100%);
 }
 
 .forward-growth-chart__plot {

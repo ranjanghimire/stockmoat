@@ -17,6 +17,7 @@ function minimalPack(overrides: Partial<CompanyRawPack>): CompanyRawPack {
     balanceSheetAnnual: [],
     balanceSheetQuarterly: [],
     analystEstimates: [],
+    analystEstimatesQuarterly: [],
     analystStockRecommendations: [],
     score: undefined,
     peers: [],

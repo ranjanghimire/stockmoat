@@ -77,9 +77,10 @@ export interface ParseForwardEstimatesOptions {
   minForwardFiscalYear?: number
 }
 
-/** Two reported fiscal years + three forward consensus years on the growth chart. */
-export const FORWARD_GROWTH_HISTORICAL_YEARS = 2
+/** Last completed FY (annual actual) + in-progress FY + three forward consensus years. */
 export const FORWARD_GROWTH_FORWARD_YEARS = 3
+
+const QUARTER_ORDER = ['Q1', 'Q2', 'Q3', 'Q4'] as const
 
 /**
  * Parse FMP `/stable/analyst-estimates` rows into forward-only revenue + EPS series.
@@ -187,7 +188,7 @@ export function formatRevenueUsd(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
-export type ForwardGrowthPointKind = 'actual' | 'estimate'
+export type ForwardGrowthPointKind = 'actual' | 'projected' | 'estimate'
 
 export interface ForwardGrowthChartPoint {
   fiscalYear: number
@@ -197,6 +198,8 @@ export interface ForwardGrowthChartPoint {
   eps?: number
   revenueAnalystCount?: number
   epsAnalystCount?: number
+  /** e.g. "2 reported + 2 est. quarters" for in-progress fiscal years */
+  projectionNote?: string
 }
 
 export interface ForwardGrowthCharts {
@@ -261,27 +264,205 @@ export function parseActualsFromIncome(
   return out
 }
 
-function mergeActualAndForwardCharts(
+function normalizeQuarterPeriod(row: JsonRecord): string | undefined {
+  const p = row.period
+  if (typeof p === 'string') {
+    const m = p.trim().toUpperCase().match(/^Q([1-4])$/)
+    if (m) return `Q${m[1]}`
+  }
+  const d = row.date
+  if (typeof d === 'string' && d.length >= 7) {
+    const month = Number(d.slice(5, 7))
+    if (month >= 1 && month <= 12) {
+      return `Q${Math.ceil(month / 3)}`
+    }
+  }
+  return undefined
+}
+
+function quarterlyMetricMapsForYear(
+  rows: JsonRecord[],
+  fiscalYear: number,
+  kind: 'actual' | 'estimate',
+): Map<string, { revenueUsd?: number; eps?: number }> {
+  const out = new Map<string, { revenueUsd?: number; eps?: number }>()
+
+  for (const row of rows) {
+    const y = fiscalYearFromRow(row)
+    const q = normalizeQuarterPeriod(row)
+    if (y !== fiscalYear || !q) continue
+
+    const revenueUsd =
+      kind === 'actual'
+        ? pick(row, ['revenue', 'totalRevenue', 'revenueUSD'])
+        : pick(row, ['estimatedRevenueAvg', 'revenueAvg', 'estimatedRevenue', 'revenueEstimate'])
+    const eps =
+      kind === 'actual'
+        ? pick(row, ['epsdiluted', 'epsDiluted', 'eps'])
+        : pick(row, ['estimatedEpsAvg', 'estimatedEarningsAvg', 'epsAvg', 'estimatedEps', 'eps'])
+
+    if (revenueUsd === undefined && eps === undefined) continue
+
+    const cur = out.get(q) ?? {}
+    if (revenueUsd !== undefined) cur.revenueUsd = revenueUsd
+    if (eps !== undefined) cur.eps = eps
+    out.set(q, cur)
+  }
+
+  return out
+}
+
+export interface ProjectedFiscalYearMetrics {
+  revenueUsd?: number
+  eps?: number
+  projectionNote?: string
+}
+
+/**
+ * Full-year projection for the in-progress fiscal year: sum reported quarters (income)
+ * plus consensus for quarters not yet reported.
+ */
+export function projectInProgressFiscalYearFromQuarters(
+  fiscalYear: number,
+  incomeQuarterly: JsonRecord[],
+  analystQuarterly: JsonRecord[],
+): ProjectedFiscalYearMetrics | undefined {
+  const actualByQ = quarterlyMetricMapsForYear(incomeQuarterly, fiscalYear, 'actual')
+  const estByQ = quarterlyMetricMapsForYear(analystQuarterly, fiscalYear, 'estimate')
+
+  let revenueUsd = 0
+  let eps = 0
+  let hasRevenue = false
+  let hasEps = false
+  let reportedQuarters = 0
+  let estimatedQuarters = 0
+
+  for (const q of QUARTER_ORDER) {
+    const actual = actualByQ.get(q)
+    const est = estByQ.get(q)
+
+    if (actual?.revenueUsd !== undefined) {
+      revenueUsd += actual.revenueUsd
+      hasRevenue = true
+      reportedQuarters += 1
+    } else if (est?.revenueUsd !== undefined) {
+      revenueUsd += est.revenueUsd
+      hasRevenue = true
+      estimatedQuarters += 1
+    }
+
+    if (actual?.eps !== undefined) {
+      eps += actual.eps
+      hasEps = true
+    } else if (est?.eps !== undefined) {
+      eps += est.eps
+      hasEps = true
+    }
+  }
+
+  if (!hasRevenue && !hasEps) return undefined
+
+  const projectionNote =
+    reportedQuarters > 0 && estimatedQuarters > 0
+      ? `${reportedQuarters} reported + ${estimatedQuarters} est. quarters`
+      : reportedQuarters > 0
+        ? `${reportedQuarters} reported quarters`
+        : estimatedQuarters > 0
+          ? `${estimatedQuarters} est. quarters`
+          : undefined
+
+  return {
+    revenueUsd: hasRevenue ? revenueUsd : undefined,
+    eps: hasEps ? eps : undefined,
+    projectionNote,
+  }
+}
+
+function annualConsensusForYear(
+  analystRows: JsonRecord[],
+  fiscalYear: number,
+): { revenueUsd?: number; eps?: number; revenueAnalystCount?: number; epsAnalystCount?: number } | undefined {
+  for (const row of analystRows) {
+    const y = fiscalYearFromRow(row)
+    if (y !== fiscalYear) continue
+    const revenueUsd = pick(row, ['estimatedRevenueAvg', 'revenueAvg', 'estimatedRevenue', 'revenueEstimate'])
+    const eps = pick(row, ['estimatedEpsAvg', 'estimatedEarningsAvg', 'epsAvg', 'estimatedEps', 'eps'])
+    if (revenueUsd === undefined && eps === undefined) continue
+    return {
+      revenueUsd,
+      eps,
+      revenueAnalystCount: pick(row, [
+        'numberAnalystEstimatedRevenue',
+        'numberOfAnalystsEstimatedRevenue',
+        'numAnalystsRevenue',
+      ]),
+      epsAnalystCount: pick(row, ['numberAnalystEstimatedEps', 'numberAnalystsEstimatedEps', 'numAnalystsEps']),
+    }
+  }
+  return undefined
+}
+
+function buildFiveYearGrowthCharts(
   symbol: string,
-  histYears: number[],
-  actuals: Map<number, { revenueUsd?: number; eps?: number }>,
-  series: ForwardEstimatesSeries,
+  lastActual: number,
+  incomeAnnual: JsonRecord[],
+  incomeQuarterly: JsonRecord[],
+  analystRows: JsonRecord[],
+  analystQuarterly: JsonRecord[],
 ): ForwardGrowthCharts | undefined {
-  const forward = forwardEstimatesToGrowthCharts(series)
+  const completedYear = lastActual
+  const inProgressYear = lastActual + 1
+  const minForward = lastActual + 2
+
   const points: ForwardGrowthChartPoint[] = []
 
-  for (const fy of histYears) {
-    const a = actuals.get(fy)
-    if (a?.revenueUsd === undefined && a?.eps === undefined) continue
+  const actuals = parseActualsFromIncome(incomeAnnual, [completedYear])
+  const completed = actuals.get(completedYear)
+  if (completed?.revenueUsd !== undefined || completed?.eps !== undefined) {
     points.push({
-      fiscalYear: fy,
-      label: `FY${fy}`,
+      fiscalYear: completedYear,
+      label: `FY${completedYear}`,
       kind: 'actual',
-      revenueUsd: a?.revenueUsd,
-      eps: a?.eps,
+      revenueUsd: completed.revenueUsd,
+      eps: completed.eps,
     })
   }
 
+  const projected = projectInProgressFiscalYearFromQuarters(
+    inProgressYear,
+    incomeQuarterly,
+    analystQuarterly,
+  )
+  if (projected?.revenueUsd !== undefined || projected?.eps !== undefined) {
+    points.push({
+      fiscalYear: inProgressYear,
+      label: `FY${inProgressYear}`,
+      kind: 'projected',
+      revenueUsd: projected.revenueUsd,
+      eps: projected.eps,
+      projectionNote: projected.projectionNote,
+    })
+  } else {
+    const fallback = annualConsensusForYear(analystRows, inProgressYear)
+    if (fallback?.revenueUsd !== undefined || fallback?.eps !== undefined) {
+      points.push({
+        fiscalYear: inProgressYear,
+        label: `FY${inProgressYear}`,
+        kind: 'estimate',
+        revenueUsd: fallback.revenueUsd,
+        eps: fallback.eps,
+        revenueAnalystCount: fallback.revenueAnalystCount,
+        epsAnalystCount: fallback.epsAnalystCount,
+        projectionNote: 'Annual consensus (quarterly detail unavailable)',
+      })
+    }
+  }
+
+  const series = parseForwardEstimatesFromFmp(symbol, analystRows, {
+    maxYears: FORWARD_GROWTH_FORWARD_YEARS,
+    minForwardFiscalYear: minForward,
+  })
+  const forward = forwardEstimatesToGrowthCharts(series)
   if (forward?.points) {
     for (const p of forward.points) {
       points.push(p)
@@ -289,7 +470,7 @@ function mergeActualAndForwardCharts(
   }
 
   if (points.length === 0) return undefined
-  return { symbol: symbol.toUpperCase(), points, asOf: series.asOf }
+  return { symbol: symbol.toUpperCase(), points, asOf: series.asOf ?? asOfFromRows(analystQuarterly) }
 }
 
 export function forwardGrowthChartsUsable(charts: ForwardGrowthCharts | null | undefined): boolean {
@@ -300,6 +481,8 @@ export function buildForwardGrowthChartsFromPack(
   symbol: string,
   analystRows: JsonRecord[],
   incomeAnnual: JsonRecord[],
+  incomeQuarterly: JsonRecord[] = [],
+  analystQuarterly: JsonRecord[] = [],
 ): ForwardGrowthCharts | undefined {
   const lastActual = lastActualFiscalYearFromIncome(incomeAnnual)
 
@@ -308,19 +491,14 @@ export function buildForwardGrowthChartsFromPack(
     return forwardEstimatesToGrowthCharts(series)
   }
 
-  const histYears = Array.from(
-    { length: FORWARD_GROWTH_HISTORICAL_YEARS },
-    (_, i) => lastActual - (FORWARD_GROWTH_HISTORICAL_YEARS - 1 - i),
+  return buildFiveYearGrowthCharts(
+    symbol,
+    lastActual,
+    incomeAnnual,
+    incomeQuarterly,
+    analystRows,
+    analystQuarterly,
   )
-  const minForward = lastActual + 2
-
-  const actuals = parseActualsFromIncome(incomeAnnual, histYears)
-  const series = parseForwardEstimatesFromFmp(symbol, analystRows, {
-    maxYears: FORWARD_GROWTH_FORWARD_YEARS,
-    minForwardFiscalYear: minForward,
-  })
-
-  return mergeActualAndForwardCharts(symbol, histYears, actuals, series)
 }
 
 export function formatForwardEstimatesBlock(companyName: string, series: ForwardEstimatesSeries): string {

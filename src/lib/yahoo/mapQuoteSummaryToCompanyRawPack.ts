@@ -299,6 +299,7 @@ export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown
     balanceSheetAnnual: balanceAnnual,
     balanceSheetQuarterly: balanceQuarterly,
     analystEstimates,
+    analystEstimatesQuarterly: [],
     analystStockRecommendations: [],
     score: undefined,
     peers: [],

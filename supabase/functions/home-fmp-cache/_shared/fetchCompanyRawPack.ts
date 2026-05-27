@@ -25,6 +25,8 @@ export interface CompanyRawPack {
   balanceSheetAnnual: JsonRecord[]
   balanceSheetQuarterly: JsonRecord[]
   analystEstimates: JsonRecord[]
+  /** FMP `/stable/analyst-estimates?period=quarter` for in-progress FY projection. */
+  analystEstimatesQuarterly: JsonRecord[]
   /** FMP `/stable/analyst-stock-recommendations` time series; empty when unavailable or Yahoo-shaped pack. */
   analystStockRecommendations: JsonRecord[]
   /** FMP `/stable/grades-consensus` summary row when available (often populated when the recommendations series is empty). */
@@ -150,6 +152,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     bsRaw,
     bsQuarterlyRaw,
     analystRaw,
+    analystQuarterlyRaw,
     analystStockRecRaw,
     gradesConsensusRaw,
   ] = await Promise.all([
@@ -183,6 +186,10 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     ).catch(() => null),
     fmpGet<unknown>(
       `/stable/analyst-estimates?symbol=${q}&period=annual&limit=${FMP_ANALYST_ESTIMATES_LIMIT}`,
+      apiKey,
+    ).catch(() => null),
+    fmpGet<unknown>(
+      `/stable/analyst-estimates?symbol=${q}&period=quarter&limit=${FMP_ANALYST_ESTIMATES_LIMIT}`,
       apiKey,
     ).catch(() => null),
     fmpGet<unknown>(`/stable/analyst-stock-recommendations?symbol=${q}`, apiKey).catch(() => null),
@@ -227,6 +234,10 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
       ? []
       : asArray<JsonRecord>(bsQuarterlyRaw)
   const analystArr = analystRaw === null ? [] : asArray<JsonRecord>(analystRaw)
+  const analystQuarterlyArr =
+    analystQuarterlyRaw === null || fmpPayloadHasErrorMessage(analystQuarterlyRaw)
+      ? []
+      : asArray<JsonRecord>(analystQuarterlyRaw)
   const analystStockRecommendationsArr =
     analystStockRecRaw === null || fmpPayloadHasErrorMessage(analystStockRecRaw)
       ? []
@@ -254,6 +265,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     balanceSheetAnnual: bsArr,
     balanceSheetQuarterly: bsQuarterlyArr,
     analystEstimates: analystArr,
+    analystEstimatesQuarterly: analystQuarterlyArr,
     analystStockRecommendations: analystStockRecommendationsArr,
     ...(gradesConsensus !== undefined ? { gradesConsensus } : {}),
     score,
@@ -271,6 +283,21 @@ export async function fetchAnalystEstimatesAnnual(
   const limit = options?.limit ?? FMP_ANALYST_ESTIMATES_LIMIT
   const raw = await fmpGet<unknown>(
     `/stable/analyst-estimates?symbol=${q}&period=annual&limit=${limit}`,
+    apiKey,
+    { signal: options?.signal },
+  )
+  return asArray<JsonRecord>(raw)
+}
+
+export async function fetchAnalystEstimatesQuarterly(
+  symbol: string,
+  apiKey: string,
+  options?: { signal?: AbortSignal; limit?: number },
+): Promise<JsonRecord[]> {
+  const q = encodeURIComponent(symbol.toUpperCase())
+  const limit = options?.limit ?? FMP_ANALYST_ESTIMATES_LIMIT
+  const raw = await fmpGet<unknown>(
+    `/stable/analyst-estimates?symbol=${q}&period=quarter&limit=${limit}`,
     apiKey,
     { signal: options?.signal },
   )

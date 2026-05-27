@@ -58,6 +58,12 @@ export async function resolveForwardEstimates(
 
   if (!seriesHasData(series)) return null
 
-  const charts = buildForwardGrowthChartsFromPack(sym, analystRows, pack.incomeAnnual)
+  const charts = buildForwardGrowthChartsFromPack(
+    sym,
+    analystRows,
+    pack.incomeAnnual,
+    pack.incomeQuarterly,
+    pack.analystEstimatesQuarterly ?? [],
+  )
   return { series, charts: charts ?? undefined }
 }

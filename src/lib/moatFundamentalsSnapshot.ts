@@ -235,6 +235,8 @@ export function buildMoatFundamentalsSnapshot(
         f.symbol,
         pack.analystEstimates,
         pack.incomeAnnual,
+        pack.incomeQuarterly,
+        pack.analystEstimatesQuarterly ?? [],
       )
       if (forwardGrowthChartsUsable(forwardGrowth)) base.forwardGrowth = forwardGrowth
     }

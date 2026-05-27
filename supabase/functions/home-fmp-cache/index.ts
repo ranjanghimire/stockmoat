@@ -46,6 +46,15 @@ async function fetchAnalystEstimatesAnnual(symbol: string, apiKey: string): Prom
   return asArray<JsonRecord>(raw)
 }
 
+async function fetchAnalystEstimatesQuarterly(symbol: string, apiKey: string): Promise<JsonRecord[]> {
+  const q = encodeURIComponent(symbol.toUpperCase())
+  const raw = await fmpGet<unknown>(
+    `/stable/analyst-estimates?symbol=${q}&period=quarter&limit=${FMP_ANALYST_ESTIMATES_LIMIT}`,
+    apiKey,
+  )
+  return asArray<JsonRecord>(raw)
+}
+
 function mergeQuoteIntoPack(pack: CompanyRawPack, quote: JsonRecord | undefined): CompanyRawPack {
   if (!quote) return pack
   return { ...pack, quote }
@@ -131,13 +140,27 @@ Deno.serve(async (req) => {
 
     let analystRows = pack.analystEstimates ?? []
     let forwardMeta: 'fmp' | 'pack' = 'pack'
-    const builtFromPack = buildForwardGrowthChartsFromPack(symbol, analystRows, pack.incomeAnnual)
+    let analystQuarterly = pack.analystEstimatesQuarterly ?? []
+    const builtFromPack = buildForwardGrowthChartsFromPack(
+      symbol,
+      analystRows,
+      pack.incomeAnnual,
+      pack.incomeQuarterly ?? [],
+      analystQuarterly,
+    )
     let charts = forwardGrowthChartsUsable(builtFromPack) ? builtFromPack : undefined
 
     if (!charts) {
       analystRows = await fetchAnalystEstimatesAnnual(symbol, fmpKey)
+      analystQuarterly = await fetchAnalystEstimatesQuarterly(symbol, fmpKey)
       forwardMeta = 'fmp'
-      charts = buildForwardGrowthChartsFromPack(symbol, analystRows, pack.incomeAnnual)
+      charts = buildForwardGrowthChartsFromPack(
+        symbol,
+        analystRows,
+        pack.incomeAnnual,
+        pack.incomeQuarterly ?? [],
+        analystQuarterly,
+      )
     }
 
     if (!forwardGrowthChartsUsable(charts)) {
@@ -219,7 +242,13 @@ Deno.serve(async (req) => {
     meta.fetched_at.pack = packAt
     meta.fetched_at.quote = quoteAt
 
-    const built = buildForwardGrowthChartsFromPack(symbol, pack.analystEstimates, pack.incomeAnnual)
+    const built = buildForwardGrowthChartsFromPack(
+      symbol,
+      pack.analystEstimates,
+      pack.incomeAnnual,
+      pack.incomeQuarterly ?? [],
+      pack.analystEstimatesQuarterly ?? [],
+    )
     if (forwardGrowthChartsUsable(built)) {
       forwardGrowth = built
       forwardAt = packAt
@@ -251,6 +280,8 @@ Deno.serve(async (req) => {
         symbol,
         (pack as CompanyRawPack).analystEstimates,
         (pack as CompanyRawPack).incomeAnnual,
+        (pack as CompanyRawPack).incomeQuarterly ?? [],
+        (pack as CompanyRawPack).analystEstimatesQuarterly ?? [],
       )
       if (forwardGrowthChartsUsable(built)) {
         forwardGrowth = built
@@ -277,6 +308,8 @@ Deno.serve(async (req) => {
         symbol,
         (pack as CompanyRawPack).analystEstimates,
         (pack as CompanyRawPack).incomeAnnual,
+        (pack as CompanyRawPack).incomeQuarterly ?? [],
+        (pack as CompanyRawPack).analystEstimatesQuarterly ?? [],
       )
       if (forwardGrowthChartsUsable(built)) {
         forwardGrowth = built

@@ -39,6 +39,11 @@ function barClassForPoint(point: ForwardGrowthChartPoint, estimateMetricClass: s
       ? 'forward-growth-chart__bar--actual forward-growth-chart__bar--eps'
       : 'forward-growth-chart__bar--actual'
   }
+  if (point.kind === 'projected') {
+    return estimateMetricClass.includes('eps')
+      ? 'forward-growth-chart__bar--projected forward-growth-chart__bar--eps'
+      : 'forward-growth-chart__bar--projected'
+  }
   return `forward-growth-chart__bar ${estimateMetricClass}`.trim()
 }
 
@@ -79,8 +84,9 @@ function ForwardBarGroup({
                   style={{ height: `${barRem}rem` }}
                   title={[
                     p.label,
-                    p.kind === 'actual' ? 'Reported' : 'Consensus',
+                    p.kind === 'actual' ? 'Reported' : p.kind === 'projected' ? 'YTD + est. quarters' : 'Consensus',
                     formatValue(v),
+                    p.projectionNote,
                     yoy,
                     analysts,
                   ]
@@ -94,6 +100,9 @@ function ForwardBarGroup({
                 </span>
                 <span className="forward-growth-chart__label-value">{formatValue(v)}</span>
                 {yoy ? <span className="forward-growth-chart__label-yoy">{yoy}</span> : null}
+                {p.projectionNote ? (
+                  <span className="forward-growth-chart__label-note">{p.projectionNote}</span>
+                ) : null}
               </div>
             </div>
           )
@@ -133,13 +142,17 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
             <span className="forward-growth-chart__badge">FMP analysts</span>
           </div>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">
-            Five fiscal years at a glance: two reported years from financial statements (gray) and three forward
-            analyst consensus years (color). YoY % compares each bar to the prior year.
+            Five fiscal years: last full year reported (gray), current year built from reported quarters plus
+            consensus for remaining quarters (amber), then three forward consensus years (color).
           </p>
           <div className="forward-growth-chart__legend">
             <span className="forward-growth-chart__legend-item">
               <span className="forward-growth-chart__legend-swatch forward-growth-chart__legend-swatch--actual" />
-              Reported
+              Reported (annual)
+            </span>
+            <span className="forward-growth-chart__legend-item">
+              <span className="forward-growth-chart__legend-swatch forward-growth-chart__legend-swatch--projected" />
+              Current year (YTD + est.)
             </span>
             <span className="forward-growth-chart__legend-item">
               <span className="forward-growth-chart__legend-swatch forward-growth-chart__legend-swatch--revenue" />
@@ -186,8 +199,8 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
       </div>
 
       <p className="border-t border-sky-100/90 px-4 py-2 text-[11px] leading-snug text-slate-500">
-        Source: FMP annual income statements (reported) and analyst-estimates (consensus). Not company guidance or
-        investment advice.
+        Source: FMP income statements (annual + quarterly), quarterly and annual analyst-estimates. Not company
+        guidance or investment advice.
       </p>
     </section>
   )
