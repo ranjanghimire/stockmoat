@@ -283,7 +283,9 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   }
 
   const priceToBook = pick(km, ['pbRatio', 'priceToBookRatio']) ?? pick(r, ['priceToBookRatio'])
-  const pegRatio = pick(km, ['pegRatio']) ?? pick(r, ['pegRatio'])
+  const pegRatio =
+    pick(km, ['pegRatio', 'pegRatioTTM', 'pegTTM', 'peg']) ??
+    pick(r, ['pegRatio', 'pegRatioTTM', 'pegTTM', 'peg'])
   const dividendYield = pick(km, ['dividendYield']) ?? pick(r, ['dividendYield'])
 
   let enterpriseValue =
