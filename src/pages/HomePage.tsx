@@ -26,7 +26,7 @@ import {
 import {
   buildForwardGrowthChartsFromPack,
   forwardGrowthChartsUsable,
-  type ForwardGrowthCharts,
+  type ForwardGrowthCharts as ForwardGrowthChartsData,
 } from '../lib/fmp/parseForwardEstimates'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
@@ -48,7 +48,7 @@ import { MoatAnalysisSection } from '../components/MoatAnalysisSection'
 import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
 import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
 import { ValuationSnapshotCard } from '../components/ValuationSnapshotCard'
-import { ForwardGrowthCharts } from '../components/ForwardGrowthCharts'
+import { ForwardGrowthCharts as ForwardGrowthChartsCard } from '../components/ForwardGrowthCharts'
 import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
 import { PillarBars } from '../components/PillarBars'
 import { PillarDetailPanel } from '../components/PillarDetailPanel'
@@ -189,7 +189,7 @@ export default function HomePage() {
       let pack: CompanyRawPack
       let peerMedians = EMPTY_PEER_MEDIANS
       let edgeQuoteMeta: HomeFmpEdgeMeta | null = null
-      let edgeForwardGrowth: ForwardGrowthCharts | undefined
+      let edgeForwardGrowth: ForwardGrowthChartsData | undefined
 
       if (useYahoo) {
         pack = await fetchYahooCompanyPackDev(sym, { refresh: opts?.forceRefresh === true })
@@ -295,14 +295,12 @@ export default function HomePage() {
           profileCacheKey: cacheKey,
           symbol: sym,
         }).then((charts) => {
-          if (!forwardGrowthChartsUsable(charts)) return
+          if (!charts || !forwardGrowthChartsUsable(charts)) return
           setAnalysis((prev) => {
-            if (!prev || prev.ticker.toUpperCase() !== sym) return prev
+            if (!prev || prev.ticker.toUpperCase() !== sym || !prev.fundamentals) return prev
             return {
               ...prev,
-              fundamentals: prev.fundamentals
-                ? { ...prev.fundamentals, forwardGrowth: charts }
-                : { forwardGrowth: charts },
+              fundamentals: { ...prev.fundamentals, forwardGrowth: charts },
             }
           })
         })
@@ -314,14 +312,12 @@ export default function HomePage() {
       ) {
         void fetchAnalystEstimatesAnnual(sym, fmpKey).then((rows) => {
           const charts = buildForwardGrowthChartsFromPack(sym, rows, pack.incomeAnnual)
-          if (!forwardGrowthChartsUsable(charts)) return
+          if (!charts || !forwardGrowthChartsUsable(charts)) return
           setAnalysis((prev) => {
-            if (!prev || prev.ticker.toUpperCase() !== sym) return prev
+            if (!prev || prev.ticker.toUpperCase() !== sym || !prev.fundamentals) return prev
             return {
               ...prev,
-              fundamentals: prev.fundamentals
-                ? { ...prev.fundamentals, forwardGrowth: charts }
-                : { forwardGrowth: charts },
+              fundamentals: { ...prev.fundamentals, forwardGrowth: charts },
             }
           })
           if (edgeHomeCache && supabaseClient) {
@@ -582,7 +578,7 @@ export default function HomePage() {
               <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
             ) : null}
             {analysis.fundamentals?.forwardGrowth ? (
-              <ForwardGrowthCharts charts={analysis.fundamentals.forwardGrowth} />
+              <ForwardGrowthChartsCard charts={analysis.fundamentals.forwardGrowth} />
             ) : null}
             <KeyTakeawaySection loading={loading} analysis={analysis} />
             <PillarBars

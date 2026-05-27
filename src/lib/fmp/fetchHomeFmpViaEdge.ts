@@ -49,22 +49,17 @@ export function shouldUseHomeFmpEdgeCache(): boolean {
   return true
 }
 
-function parseEdgeBody(data: unknown): {
-  ok: boolean
+type EdgeInvokeBody = {
+  ok?: boolean
   pack?: CompanyRawPack
   peer_medians?: PeerMedians
   forward_growth?: ForwardGrowthCharts
   meta?: HomeFmpEdgeMeta
   error?: string
-} {
-  return (data ?? {}) as {
-    ok?: boolean
-    pack?: CompanyRawPack
-    peer_medians?: PeerMedians
-    forward_growth?: ForwardGrowthCharts
-    meta?: HomeFmpEdgeMeta
-    error?: string
-  }
+}
+
+function parseEdgeBody(data: unknown): EdgeInvokeBody {
+  return (data ?? {}) as EdgeInvokeBody
 }
 
 /**
@@ -130,7 +125,7 @@ export async function refreshForwardGrowthChartsViaEdge(options: {
 }): Promise<ForwardGrowthCharts | null> {
   if (!shouldUseHomeFmpEdgeCache()) return null
 
-  const { data, error } = await supabase.functions.invoke('home-fmp-cache', {
+  const { data, error } = await options.supabase.functions.invoke('home-fmp-cache', {
     body: {
       profile_cache_key: options.profileCacheKey,
       symbol: options.symbol,
