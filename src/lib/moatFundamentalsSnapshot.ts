@@ -1,4 +1,7 @@
 import type { CompanyFacts } from './fmp/buildCompanyFacts'
+import type { PeerMedians } from './fmp/peerMedians'
+import { buildValuationSummary } from './metricInterpretation/buildInterpretation'
+import type { ValuationSummary } from './metricInterpretation/types'
 import type { CompanyRawPack } from './fmp/fetchCompanyRawPack'
 import {
   analystRecommendationFromFmpPack,
@@ -96,6 +99,8 @@ export interface MoatFundamentalsSnapshot {
   analystRecommendations?: AnalystRecommendationSnapshot
   incomeCharts?: IncomeFundamentalsCharts
   balanceCharts?: BalanceFundamentalsCharts
+  /** Headline valuation multiples with meters (P/E, PEG, EV multiples). */
+  valuation?: ValuationSummary
 }
 
 function pickNetIncome(row: JsonRecord): number | undefined {
@@ -177,7 +182,12 @@ function buildBalanceChartsFromPack(pack: CompanyRawPack): BalanceFundamentalsCh
   return { yearly, quarterly }
 }
 
-export function buildMoatFundamentalsSnapshot(f: CompanyFacts, pack?: CompanyRawPack): MoatFundamentalsSnapshot {
+export function buildMoatFundamentalsSnapshot(
+  f: CompanyFacts,
+  pack?: CompanyRawPack,
+  peers?: PeerMedians | null,
+  sector?: string,
+): MoatFundamentalsSnapshot {
   const base: MoatFundamentalsSnapshot = {
     revenueTtmUsd: f.revenueTtmAbsolute,
     netIncomeTtmUsd: f.niTtmAbsolute,
@@ -197,6 +207,9 @@ export function buildMoatFundamentalsSnapshot(f: CompanyFacts, pack?: CompanyRaw
   if (f.dividendYield !== undefined && Number.isFinite(f.dividendYield)) {
     base.dividendYield = f.dividendYield
   }
+
+  const valuation = buildValuationSummary(f, peers ?? null, sector ?? f.sector)
+  if (valuation.lines.length > 0) base.valuation = valuation
 
   if (pack) {
     const incomeCharts = buildIncomeChartsFromPack(pack)

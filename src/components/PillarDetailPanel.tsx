@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import type { MetricRow, MoatAnalysis } from '../lib/computeMoatAnalysis'
 import type { MoatFundamentalsSnapshot } from '../lib/moatFundamentalsSnapshot'
 import { PILLAR_INTRO, PILLAR_LABEL } from '../lib/pillarMeta'
+import { MetricInterpretationMeter } from './MetricInterpretationMeter'
 
 interface PillarDetailPanelProps {
   analysis: MoatAnalysis
@@ -15,31 +17,12 @@ function ModeBadge({ mode }: { mode: string }) {
       : mode === 'hybrid'
         ? 'bg-amber-100 text-amber-900'
         : 'bg-emerald-100 text-emerald-900'
+  const label = mode === 'gate' ? 'Must pass' : mode === 'hybrid' ? 'Threshold + grade' : 'Graded'
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${styles}`}>
-      {mode}
+      {label}
     </span>
   )
-}
-
-function scoreRationale(m: MetricRow): string {
-  if (m.mode === 'gate') {
-    if (!m.gatePass) {
-      return 'This line is a gate: it failed, so it adds nothing to the weighted sum and can trigger an overall score cap per sector YAML.'
-    }
-    const c = m.gateCredit ?? 1
-    if (c < 1) {
-      return `Gate passed with reduced credit (${(c * 100).toFixed(0)}%): the pillar only receives part of this line’s weight toward the total.`
-    }
-    return 'Gate passed: this line contributes its full pillar weight toward the weighted sum.'
-  }
-  if (m.mode === 'hybrid') {
-    if (!m.gatePass) {
-      return 'Hybrid metric: the threshold leg did not clear, so the model treats this as a weak outcome for the pillar.'
-    }
-    return `Hybrid metric: threshold cleared; graded subscore ${(m.subscore * 100).toFixed(0)}% is applied to this line’s pillar weight.`
-  }
-  return `Score metric: subscore ${(m.subscore * 100).toFixed(0)}% reflects how favorable this reading is versus peers or history (see bullets below).`
 }
 
 function fmtUsd(v: number | undefined): string {
@@ -74,8 +57,7 @@ function CashTruthFigures({ f }: { f: MoatFundamentalsSnapshot }) {
         <p className="font-semibold">Underlying cash & earnings (TTM)</p>
         <p className="mt-1 text-xs leading-relaxed">
           FMP did not return usable TTM statement totals for revenue, net income, or cash flows on this pack. The
-          metrics below still use ratios from key-metrics / ratios when those exist; refresh after data fills, or check
-          income / cash-flow TTM endpoints for this symbol.
+          metrics below still use ratios from key-metrics / ratios when those exist.
         </p>
       </div>
     )
@@ -84,10 +66,6 @@ function CashTruthFigures({ f }: { f: MoatFundamentalsSnapshot }) {
   return (
     <div className="mt-4 rounded-xl border border-slate-200/90 bg-slate-50/80 px-4 py-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Underlying figures (FMP TTM / latest)</p>
-      <p className="mt-1 text-xs text-slate-500">
-        Same source as <span className="font-mono">ocf_to_ni_ttm</span> / cash-truth lines: absolute dollars when
-        statements expose them; otherwise ratios only in metric cards.
-      </p>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <dt className="text-xs font-medium text-slate-500">Revenue (TTM)</dt>
@@ -106,15 +84,15 @@ function CashTruthFigures({ f }: { f: MoatFundamentalsSnapshot }) {
           <dd className="mt-0.5 font-mono text-moat-ink">{fmtUsd(f.freeCashFlowTtmUsd)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-slate-500">Capex (TTM, as reported)</dt>
+          <dt className="text-xs font-medium text-slate-500">Capex (TTM)</dt>
           <dd className="mt-0.5 font-mono text-moat-ink">{fmtUsd(f.capexTtmUsd)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-slate-500">Cash & equivalents (BS)</dt>
+          <dt className="text-xs font-medium text-slate-500">Cash & equivalents</dt>
           <dd className="mt-0.5 font-mono text-moat-ink">{fmtUsd(f.cashAndEquivalentsUsd)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-slate-500">Total debt (BS)</dt>
+          <dt className="text-xs font-medium text-slate-500">Total debt</dt>
           <dd className="mt-0.5 font-mono text-moat-ink">{fmtUsd(f.totalDebtUsd)}</dd>
         </div>
         <div>
@@ -126,6 +104,75 @@ function CashTruthFigures({ f }: { f: MoatFundamentalsSnapshot }) {
           <dd className="mt-0.5 font-mono text-moat-ink">{fmtPct(f.fcfYield)}</dd>
         </div>
       </dl>
+    </div>
+  )
+}
+
+function MetricAdvancedDetails({ m }: { m: MetricRow }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between text-left text-xs font-semibold text-slate-600 hover:text-moat-ink"
+        aria-expanded={open}
+      >
+        How this affects your score
+        <span className="text-slate-400">{open ? '−' : '+'}</span>
+      </button>
+      {open ? (
+        <div className="mt-3 space-y-3 text-sm text-slate-600">
+          <dl className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Weight in model</dt>
+              <dd>{(m.pillar_weight * 100).toFixed(2)}% of total scorecard</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Contribution</dt>
+              <dd className="font-mono">{m.weightedContribution.toFixed(4)}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Rubric score</dt>
+              <dd>
+                {m.mode === 'gate' ? (
+                  m.gatePass ? (
+                    <span className="text-emerald-700">Pass</span>
+                  ) : (
+                    <span className="text-rose-700">Fail</span>
+                  )
+                ) : (
+                  <span>{(m.subscore * 100).toFixed(0)}% on this line</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Raw reading</dt>
+              <dd className="text-xs">{m.displayValue}</dd>
+            </div>
+          </dl>
+          {m.peerNote ? (
+            <p className="text-xs leading-relaxed">
+              <span className="font-semibold text-moat-ink">Peers: </span>
+              {m.peerNote}
+            </p>
+          ) : null}
+          {m.breakdown?.length ? (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">What we checked</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-relaxed">
+                {m.breakdown.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <p className="text-[11px] italic text-slate-400">
+            Meters show favorability under this sector profile, not investment advice.
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -160,20 +207,14 @@ export function PillarDetailPanel({ analysis, pillar, onClose }: PillarDetailPan
           {rollup ? (
             <div className="mt-3 flex flex-wrap items-end gap-4">
               <div className="rounded-xl border border-moat-accent/30 bg-white/90 px-4 py-3 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pillar score (this ticker)</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pillar score</p>
                 <p className="mt-1 font-display text-3xl leading-none text-moat-ink">
                   {pillarScore}
                   <span className="ml-1 text-base font-sans font-medium text-slate-400">/ 10</span>
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Same scale as headline moat score: 1 + 9 × (pillar contribution ÷ pillar weight), capped at the bar
-                  fill ({strengthPct}% strength).
-                </p>
               </div>
               <p className="max-w-md text-xs text-slate-500">
-                This pillar uses <span className="font-semibold text-moat-ink">{(rollup.weight * 100).toFixed(1)}%</span>{' '}
-                of total model weight. Strength bar:{' '}
-                <span className="font-semibold text-moat-ink">{strengthPct}%</span> (contribution ÷ pillar weight).
+                This pillar is {(rollup.weight * 100).toFixed(1)}% of your total score · strength {strengthPct}%
               </p>
             </div>
           ) : null}
@@ -198,7 +239,6 @@ export function PillarDetailPanel({ analysis, pillar, onClose }: PillarDetailPan
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h3 className="font-semibold text-moat-ink">{m.label}</h3>
-                  <p className="mt-0.5 font-mono text-[11px] text-slate-400">{m.id}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <ModeBadge mode={m.mode} />
@@ -210,67 +250,15 @@ export function PillarDetailPanel({ analysis, pillar, onClose }: PillarDetailPan
                 </div>
               </div>
 
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Observed value</dt>
-                  <dd className="mt-1 text-moat-ink">{m.displayValue}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Model line weight</dt>
-                  <dd className="mt-1 text-moat-ink">{(m.pillar_weight * 100).toFixed(2)}% of total scorecard</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contribution</dt>
-                  <dd className="mt-1 font-mono text-moat-ink">{m.weightedContribution.toFixed(4)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Subscore / gate</dt>
-                  <dd className="mt-1 text-moat-ink">
-                    {m.mode === 'gate' ? (
-                      <>
-                        {m.gatePass ? <span className="text-emerald-700">Pass</span> : <span className="text-rose-700">Fail</span>}
-                        {m.gatePass && m.gateCredit !== undefined && m.gateCredit < 1 ? (
-                          <span className="text-slate-600"> · credit {(m.gateCredit * 100).toFixed(0)}%</span>
-                        ) : null}
-                      </>
-                    ) : m.mode === 'hybrid' ? (
-                      <>
-                        <span className={m.gatePass ? 'text-emerald-700' : 'text-rose-700'}>
-                          {m.gatePass ? 'Threshold pass' : 'Threshold fail'}
-                        </span>
-                        <span className="text-slate-600"> · subscore {(m.subscore * 100).toFixed(0)}%</span>
-                      </>
-                    ) : (
-                      <span>{(m.subscore * 100).toFixed(0)}%</span>
-                    )}
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="mt-4 rounded-lg bg-slate-50/90 px-3 py-2 text-sm leading-relaxed text-slate-700">
-                <span className="font-semibold text-moat-ink">Why this line scored this way: </span>
-                {scoreRationale(m)}
-              </div>
-
-              {m.peerNote ? (
-                <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                  <span className="font-semibold text-moat-ink">Peer context: </span>
-                  {m.peerNote}
-                </p>
-              ) : null}
-
-              {m.breakdown?.length ? (
+              {m.interpretation ? (
                 <div className="mt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">What was checked</p>
-                  <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-slate-700">
-                    {m.breakdown.map((line, i) => (
-                      <li key={i}>{line}</li>
-                    ))}
-                  </ul>
+                  <MetricInterpretationMeter interpretation={m.interpretation} />
                 </div>
               ) : (
-                <p className="mt-4 text-xs italic text-slate-400">No extra rubric notes from the evaluator for this line.</p>
+                <p className="mt-4 text-sm text-slate-700">{m.displayValue}</p>
               )}
+
+              <MetricAdvancedDetails m={m} />
             </li>
           ))}
         </ul>

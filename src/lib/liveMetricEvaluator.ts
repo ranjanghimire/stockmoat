@@ -150,6 +150,7 @@ export function createLiveMetricEvaluator(
           : `${label}: ${fmt(subject)} (peer median unavailable)`,
         peerNote: peerNoteFor(p, peerRel, `${label}: subject ${fmt(subject)} vs peer median ${fmt(med)}`),
         breakdown: peerValuationBreakdown(label, 'lower'),
+        hints: { subjectValue: subject, peerMedian: med },
       }
     }
 
@@ -165,6 +166,7 @@ export function createLiveMetricEvaluator(
           : `${label}: ${fmt(subject)} (peer median unavailable)`,
         peerNote: peerNoteFor(p, peerRel, `${label}: subject ${fmt(subject)} vs peer median ${fmt(med)}`),
         breakdown: peerValuationBreakdown(label, 'higher'),
+        hints: { subjectValue: subject, peerMedian: med },
       }
     }
 
@@ -323,6 +325,7 @@ export function createLiveMetricEvaluator(
           subscore: sub,
           gatePass: true,
           displayValue: fmt(peg, 2),
+          hints: { absoluteValue: peg, valueUnit: 'multiple' },
           breakdown: [`PEG (TTM) ≈ ${fmt(peg, 2)}.`, 'Lower PEG scores higher (bounded heuristic vs 2.5×).'],
         }
       }
@@ -503,6 +506,7 @@ export function createLiveMetricEvaluator(
           subscore: sub,
           gatePass,
           displayValue: `${fi} / 9`,
+          hints: { absoluteValue: fi },
           breakdown: [`Piotroski F-score = ${fi} / 9.`, 'Hybrid gate: fail when F < 4 in this implementation.'],
         }
       }

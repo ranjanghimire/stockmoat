@@ -1,4 +1,7 @@
 import { ratioFromStrings } from './hash'
+import type { MetricEvalHints } from './metricInterpretation/types'
+
+export type { MetricEvalHints }
 
 export interface MetricEval {
   id: string
@@ -10,6 +13,8 @@ export interface MetricEval {
   gateCredit?: number
   /** Human-readable inputs / formulas / caveats for the metric table. */
   breakdown?: string[]
+  /** Structured values for UI meters and headlines. */
+  hints?: MetricEvalHints
 }
 
 function peerLine(ticker: string, id: string, peerRelative?: boolean): string | undefined {

@@ -1,8 +1,12 @@
 import type { MoatFundamentalsSnapshot } from './moatFundamentalsSnapshot'
 import { loadSectorProfiles, normalizeMetricWeights } from './loadSectorProfiles'
 import { metricLabel } from './metricLabels'
+import { buildMetricInterpretation } from './metricInterpretation/buildInterpretation'
+import type { MetricInterpretation } from './metricInterpretation/types'
 import type { MetricEval } from './mockMetricDriver'
 import type { ProfileMetricDef } from '../types/sectorProfiles'
+import type { CompanyFacts } from './fmp/buildCompanyFacts'
+import type { PeerMedians } from './fmp/peerMedians'
 
 export interface MetricRow extends ProfileMetricDef {
   label: string
@@ -12,6 +16,8 @@ export interface MetricRow extends ProfileMetricDef {
   peerNote?: string
   gateCredit?: number
   breakdown?: string[]
+  /** User-facing verdict, meter, and plain-English headline. */
+  interpretation?: MetricInterpretation
   /** Points toward the 0–1 weighted sum (weight × subscore or gate credit). */
   weightedContribution: number
 }
@@ -59,6 +65,8 @@ export function computeMoatAnalysis(
     industry?: string
     dataSource?: 'fmp' | 'demo' | 'yahoo_dev'
     fundamentals?: MoatFundamentalsSnapshot
+    facts?: CompanyFacts
+    peers?: PeerMedians | null
   },
 ): MoatAnalysis {
   const root = loadSectorProfiles()
@@ -84,6 +92,12 @@ export function computeMoatAnalysis(
     const weightedContribution =
       m.mode === 'gate' ? m.pillar_weight * (ev.gatePass ? (ev.gateCredit ?? 1) : 0) : m.pillar_weight * ev.subscore
 
+    const interpretation = buildMetricInterpretation(m.id, ev, m, {
+      sector: meta?.sector,
+      facts: meta?.facts,
+      peers: meta?.peers ?? null,
+    })
+
     rows.push({
       ...m,
       label,
@@ -93,6 +107,7 @@ export function computeMoatAnalysis(
       peerNote: ev.peerNote,
       gateCredit: ev.gateCredit,
       breakdown: ev.breakdown,
+      interpretation,
       weightedContribution,
     })
   }

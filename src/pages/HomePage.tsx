@@ -35,6 +35,7 @@ import { KeyTakeawaySection } from '../components/KeyTakeawaySection'
 import { MoatAnalysisSection } from '../components/MoatAnalysisSection'
 import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
 import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
+import { ValuationSnapshotCard } from '../components/ValuationSnapshotCard'
 import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
 import { PillarBars } from '../components/PillarBars'
 import { PillarDetailPanel } from '../components/PillarDetailPanel'
@@ -239,7 +240,9 @@ export default function HomePage() {
           sector: facts.sector,
           industry: facts.industry,
           dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
-          fundamentals: buildMoatFundamentalsSnapshot(facts, pack),
+          fundamentals: buildMoatFundamentalsSnapshot(facts, pack, peerSnapshot, facts.sector),
+          facts,
+          peers: peerSnapshot,
         },
       )
 
@@ -505,6 +508,9 @@ export default function HomePage() {
             />
             {analysis.fundamentals ? (
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />
+            ) : null}
+            {analysis.fundamentals?.valuation ? (
+              <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
             ) : null}
             <KeyTakeawaySection loading={loading} analysis={analysis} />
             <PillarBars
