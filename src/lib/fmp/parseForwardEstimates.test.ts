@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildForwardGrowthChartsFromPack,
   formatForwardEstimatesBlock,
+  forwardEstimatesToGrowthCharts,
   lastActualFiscalYearFromIncome,
   parseForwardEstimatesFromFmp,
 } from './parseForwardEstimates'
@@ -48,6 +50,28 @@ describe('parseForwardEstimatesFromFmp', () => {
     expect(series.eps.map((p) => p.fiscalYear)).toEqual([2026, 2027, 2028])
     expect(series.revenue[0]!.revenueUsd).toBeCloseTo(253.08e9, -6)
     expect(series.eps[0]!.eps).toBeCloseTo(32.32, 2)
+  })
+
+  it('builds aligned chart points for revenue and EPS', () => {
+    const series = parseForwardEstimatesFromFmp('META', META_ANALYST_ROWS, {
+      maxYears: 3,
+      lastActualFiscalYear: 2025,
+    })
+    const charts = forwardEstimatesToGrowthCharts(series)
+    expect(charts?.points).toHaveLength(3)
+    expect(charts?.points[0]).toMatchObject({
+      fiscalYear: 2026,
+      label: 'FY2026',
+      revenueUsd: expect.any(Number),
+      eps: expect.any(Number),
+    })
+  })
+
+  it('buildForwardGrowthChartsFromPack uses income for last actual FY', () => {
+    const charts = buildForwardGrowthChartsFromPack('META', META_ANALYST_ROWS, [
+      { calendarYear: 2025, revenue: 200e9 },
+    ])
+    expect(charts?.points.map((p) => p.fiscalYear)).toEqual([2026, 2027, 2028])
   })
 
   it('formats block like the Gemini prompt example', () => {

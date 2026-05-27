@@ -1,5 +1,6 @@
 import type { CompanyFacts } from './fmp/buildCompanyFacts'
 import type { PeerMedians } from './fmp/peerMedians'
+import { buildForwardGrowthChartsFromPack, type ForwardGrowthCharts } from './fmp/parseForwardEstimates'
 import { buildValuationSummary } from './metricInterpretation/buildInterpretation'
 import type { ValuationSummary } from './metricInterpretation/types'
 import type { CompanyRawPack } from './fmp/fetchCompanyRawPack'
@@ -101,6 +102,8 @@ export interface MoatFundamentalsSnapshot {
   balanceCharts?: BalanceFundamentalsCharts
   /** Headline valuation multiples with meters (P/E, PEG, EV multiples). */
   valuation?: ValuationSummary
+  /** Analyst consensus revenue / EPS for upcoming fiscal years (FMP only). */
+  forwardGrowth?: ForwardGrowthCharts
 }
 
 function pickNetIncome(row: JsonRecord): number | undefined {
@@ -218,6 +221,13 @@ export function buildMoatFundamentalsSnapshot(
     if (balanceCharts) base.balanceCharts = balanceCharts
     const ar = analystRecommendationFromFmpPack(pack)
     if (ar) base.analystRecommendations = ar
+
+    const forwardGrowth = buildForwardGrowthChartsFromPack(
+      f.symbol,
+      pack.analystEstimates,
+      pack.incomeAnnual,
+    )
+    if (forwardGrowth) base.forwardGrowth = forwardGrowth
   }
   return base
 }

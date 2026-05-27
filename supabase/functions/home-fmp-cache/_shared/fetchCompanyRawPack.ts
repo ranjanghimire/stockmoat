@@ -8,6 +8,8 @@ import { asArray, firstRow, type JsonRecord } from './normalize.ts'
 
 /** FMP free/starter plans reject `limit` > 5 on statement endpoints (402). */
 const FMP_ANNUAL_STATEMENT_LIMIT = 5
+/** Analyst estimates often need more rows to cover 3 forward FYs after filtering actuals. */
+const FMP_ANALYST_ESTIMATES_LIMIT = 10
 
 export interface CompanyRawPack {
   profile: JsonRecord | undefined
@@ -180,7 +182,7 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
       apiKey,
     ).catch(() => null),
     fmpGet<unknown>(
-      `/stable/analyst-estimates?symbol=${q}&period=annual&limit=${FMP_ANNUAL_STATEMENT_LIMIT}`,
+      `/stable/analyst-estimates?symbol=${q}&period=annual&limit=${FMP_ANALYST_ESTIMATES_LIMIT}`,
       apiKey,
     ).catch(() => null),
     fmpGet<unknown>(`/stable/analyst-stock-recommendations?symbol=${q}`, apiKey).catch(() => null),

@@ -1,69 +1,36 @@
-import type { CompanyFacts } from '../fmp/buildCompanyFacts'
 import type { CompanyRawPack } from '../fmp/fetchCompanyRawPack'
 import { fmpGet } from '../fmp/http'
 import {
+  buildForwardGrowthChartsFromPack,
   lastActualFiscalYearFromIncome,
   parseForwardEstimatesFromFmp,
   type ForwardEstimatesSeries,
+  type ForwardGrowthCharts,
 } from '../fmp/parseForwardEstimates'
 import { asArray, type JsonRecord } from '../fmp/normalize'
-import { DEFAULT_GEMINI_FORWARD_MODEL, fetchGeminiForwardEstimates } from './fetchGeminiForwardEstimates'
 
 export interface ResolveForwardEstimatesOptions {
   fmpApiKey: string
-  geminiApiKey?: string
-  geminiModel?: string
-  /** Override FMP limit (starter plans cap statement limits; estimates may need more than 5). */
+  /** Override FMP limit when refetching sparse pack rows (default 10). */
   estimateLimit?: number
   signal?: AbortSignal
 }
 
 export interface ResolvedForwardEstimates {
   series: ForwardEstimatesSeries
-  /** Present when Gemini filled gaps or replaced empty FMP. */
-  usedGeminiFallback: boolean
-  fmpSeries?: ForwardEstimatesSeries
+  charts?: ForwardGrowthCharts
 }
 
-function seriesIsUsable(s: ForwardEstimatesSeries): boolean {
-  return s.revenue.length >= 1 && s.eps.length >= 1
+function seriesHasData(s: ForwardEstimatesSeries): boolean {
+  return s.revenue.length > 0 || s.eps.length > 0
 }
 
-function mergeFmpWithGemini(fmp: ForwardEstimatesSeries, gemini: ForwardEstimatesSeries): ForwardEstimatesSeries {
-  const revYears = new Set(fmp.revenue.map((p) => p.fiscalYear))
-  const epsYears = new Set(fmp.eps.map((p) => p.fiscalYear))
-  const revenue = [...fmp.revenue]
-  const eps = [...fmp.eps]
-
-  for (const p of gemini.revenue) {
-    if (!revYears.has(p.fiscalYear) && p.revenueUsd !== undefined) {
-      revenue.push(p)
-      revYears.add(p.fiscalYear)
-    }
-  }
-  for (const p of gemini.eps) {
-    if (!epsYears.has(p.fiscalYear) && p.eps !== undefined) {
-      eps.push(p)
-      epsYears.add(p.fiscalYear)
-    }
-  }
-
-  revenue.sort((a, b) => a.fiscalYear - b.fiscalYear)
-  eps.sort((a, b) => a.fiscalYear - b.fiscalYear)
-
-  return {
-    symbol: fmp.symbol,
-    source: 'fmp',
-    asOf: fmp.asOf,
-    revenue: revenue.slice(0, 3),
-    eps: eps.slice(0, 3),
-  }
-}
-
+/**
+ * FMP-only forward analyst estimates (no Gemini). Refetches estimates when the pack has few rows.
+ */
 export async function resolveForwardEstimates(
   symbol: string,
   pack: CompanyRawPack,
-  facts: CompanyFacts,
   opts: ResolveForwardEstimatesOptions,
 ): Promise<ResolvedForwardEstimates | null> {
   const sym = symbol.toUpperCase()
@@ -84,54 +51,13 @@ export async function resolveForwardEstimates(
     }
   }
 
-  const fmpSeries = parseForwardEstimatesFromFmp(sym, analystRows, {
+  const series = parseForwardEstimatesFromFmp(sym, analystRows, {
     maxYears: 3,
     lastActualFiscalYear: lastActual,
   })
 
-  if (seriesIsUsable(fmpSeries)) {
-    return { series: fmpSeries, usedGeminiFallback: false, fmpSeries }
-  }
+  if (!seriesHasData(series)) return null
 
-  const geminiKey = opts.geminiApiKey?.trim()
-  if (!geminiKey) {
-    if (fmpSeries.revenue.length > 0 || fmpSeries.eps.length > 0) {
-      return { series: fmpSeries, usedGeminiFallback: false, fmpSeries }
-    }
-    return null
-  }
-
-  try {
-    const geminiSeries = await fetchGeminiForwardEstimates(sym, facts.companyName, geminiKey, {
-      model: opts.geminiModel ?? DEFAULT_GEMINI_FORWARD_MODEL,
-      lastActualFiscalYear: lastActual,
-      signal: opts.signal,
-    })
-
-    if (!seriesIsUsable(fmpSeries) && seriesIsUsable(geminiSeries)) {
-      return { series: { ...geminiSeries, source: 'gemini' }, usedGeminiFallback: true, fmpSeries }
-    }
-
-    if (seriesIsUsable(fmpSeries) && seriesIsUsable(geminiSeries)) {
-      return {
-        series: mergeFmpWithGemini(fmpSeries, geminiSeries),
-        usedGeminiFallback: true,
-        fmpSeries,
-      }
-    }
-
-    if (seriesIsUsable(geminiSeries)) {
-      return { series: geminiSeries, usedGeminiFallback: true, fmpSeries }
-    }
-  } catch {
-    if (fmpSeries.revenue.length > 0 || fmpSeries.eps.length > 0) {
-      return { series: fmpSeries, usedGeminiFallback: false, fmpSeries }
-    }
-    return null
-  }
-
-  if (fmpSeries.revenue.length > 0 || fmpSeries.eps.length > 0) {
-    return { series: fmpSeries, usedGeminiFallback: false, fmpSeries }
-  }
-  return null
+  const charts = buildForwardGrowthChartsFromPack(sym, analystRows, pack.incomeAnnual)
+  return { series, charts: charts ?? undefined }
 }

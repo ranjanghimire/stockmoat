@@ -36,6 +36,7 @@ import { MoatAnalysisSection } from '../components/MoatAnalysisSection'
 import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
 import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
 import { ValuationSnapshotCard } from '../components/ValuationSnapshotCard'
+import { ForwardGrowthCharts } from '../components/ForwardGrowthCharts'
 import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
 import { PillarBars } from '../components/PillarBars'
 import { PillarDetailPanel } from '../components/PillarDetailPanel'
@@ -511,6 +512,9 @@ export default function HomePage() {
             ) : null}
             {analysis.fundamentals?.valuation ? (
               <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
+            ) : null}
+            {analysis.fundamentals?.forwardGrowth ? (
+              <ForwardGrowthCharts charts={analysis.fundamentals.forwardGrowth} />
             ) : null}
             <KeyTakeawaySection loading={loading} analysis={analysis} />
             <PillarBars

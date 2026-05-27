@@ -1,4 +1,5 @@
-import { num, type JsonRecord } from './normalize'
+import type { JsonRecord } from './normalize'
+import { num } from './normalize'
 
 export interface ForwardEstimatePoint {
   fiscalYear: number
@@ -173,6 +174,63 @@ export function formatRevenueUsd(n: number): string {
   if (abs >= 1e9) return `$${(n / 1e9).toFixed(2)}B`
   if (abs >= 1e6) return `$${(n / 1e6).toFixed(2)}M`
   return `$${n.toFixed(0)}`
+}
+
+export interface ForwardGrowthChartPoint {
+  fiscalYear: number
+  label: string
+  revenueUsd?: number
+  eps?: number
+  revenueAnalystCount?: number
+  epsAnalystCount?: number
+}
+
+export interface ForwardGrowthCharts {
+  symbol: string
+  points: ForwardGrowthChartPoint[]
+  asOf?: string
+}
+
+/** Merge revenue + EPS series into aligned FY rows for charting. */
+export function forwardEstimatesToGrowthCharts(series: ForwardEstimatesSeries): ForwardGrowthCharts | undefined {
+  const years = new Set([
+    ...series.revenue.map((p) => p.fiscalYear),
+    ...series.eps.map((p) => p.fiscalYear),
+  ])
+  if (years.size === 0) return undefined
+
+  const revByFy = new Map(series.revenue.map((p) => [p.fiscalYear, p]))
+  const epsByFy = new Map(series.eps.map((p) => [p.fiscalYear, p]))
+
+  const points: ForwardGrowthChartPoint[] = [...years]
+    .sort((a, b) => a - b)
+    .map((fiscalYear) => {
+      const r = revByFy.get(fiscalYear)
+      const e = epsByFy.get(fiscalYear)
+      return {
+        fiscalYear,
+        label: `FY${fiscalYear}`,
+        revenueUsd: r?.revenueUsd,
+        eps: e?.eps,
+        revenueAnalystCount: r?.revenueAnalystCount,
+        epsAnalystCount: e?.epsAnalystCount,
+      }
+    })
+
+  return { symbol: series.symbol, points, asOf: series.asOf }
+}
+
+export function buildForwardGrowthChartsFromPack(
+  symbol: string,
+  analystRows: JsonRecord[],
+  incomeAnnual: JsonRecord[],
+): ForwardGrowthCharts | undefined {
+  const lastActual = lastActualFiscalYearFromIncome(incomeAnnual)
+  const series = parseForwardEstimatesFromFmp(symbol, analystRows, {
+    maxYears: 3,
+    lastActualFiscalYear: lastActual,
+  })
+  return forwardEstimatesToGrowthCharts(series)
 }
 
 export function formatForwardEstimatesBlock(companyName: string, series: ForwardEstimatesSeries): string {
