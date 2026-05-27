@@ -133,31 +133,126 @@
 }
 
 .metric-tooltip-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
   margin-left: 0.25rem;
   vertical-align: middle;
+  z-index: 1;
+}
+
+.metric-tooltip-wrap:has(.metric-tooltip-popover) {
+  z-index: 40;
 }
 
 .metric-tooltip-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
-  height: 1rem;
+  width: 1.125rem;
+  height: 1.125rem;
   border-radius: 50%;
   border: 1px solid #cbd5e1;
   background: #fff;
   font-size: 0.65rem;
   font-weight: 700;
   color: #64748b;
-  cursor: help;
+  cursor: pointer;
   line-height: 1;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .metric-tooltip-btn:hover,
-.metric-tooltip-btn:focus-visible {
+.metric-tooltip-btn:focus-visible,
+.metric-tooltip-btn--open {
   border-color: var(--color-moat-accent);
   color: var(--color-moat-accent-dim);
   outline: none;
+  box-shadow: 0 0 0 2px rgb(27 127 92 / 18%);
+}
+
+.metric-tooltip-popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 50%;
+  z-index: 50;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2rem));
+  transform: translateX(-50%);
+  padding: 0.65rem 2rem 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow:
+    0 4px 6px -1px rgb(12 17 29 / 8%),
+    0 12px 24px -4px rgb(12 17 29 / 12%);
+  animation: metric-tooltip-in 0.15s ease-out;
+}
+
+.metric-tooltip-popover__text {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--color-moat-ink);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.metric-tooltip-popover__close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  font-size: 1rem;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.metric-tooltip-popover__close:hover,
+.metric-tooltip-popover__close:focus-visible {
+  background: #f1f5f9;
+  color: var(--color-moat-ink);
+  outline: none;
+}
+
+@keyframes metric-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .metric-tooltip-popover {
+    left: 0;
+    right: auto;
+    max-width: min(18rem, calc(100vw - 2.5rem));
+    transform: none;
+  }
+
+  @keyframes metric-tooltip-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }

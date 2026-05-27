@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState } from 'react'
 import type { MetricInterpretation, MetricSparkline } from '../lib/metricInterpretation/types'
 import './MetricInterpretationMeter.css'
 
@@ -25,16 +26,61 @@ function MetricSparklineBars({ sparkline }: { sparkline: MetricSparkline }) {
 }
 
 export function MetricTooltip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  const tooltipId = useId()
+
+  useEffect(() => {
+    if (!open) return
+    const closeIfOutside = (e: MouseEvent | TouchEvent) => {
+      const el = wrapRef.current
+      if (el && !el.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', closeIfOutside)
+    document.addEventListener('touchstart', closeIfOutside, { passive: true })
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', closeIfOutside)
+      document.removeEventListener('touchstart', closeIfOutside)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   return (
-    <span className="metric-tooltip-wrap">
+    <span className="metric-tooltip-wrap" ref={wrapRef}>
       <button
         type="button"
-        className="metric-tooltip-btn"
+        className={`metric-tooltip-btn${open ? ' metric-tooltip-btn--open' : ''}`}
         aria-label="What does this mean?"
-        title={text}
+        aria-expanded={open}
+        aria-controls={open ? tooltipId : undefined}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setOpen((o) => !o)
+        }}
       >
         ?
       </button>
+      {open ? (
+        <div id={tooltipId} className="metric-tooltip-popover" role="tooltip">
+          <p className="metric-tooltip-popover__text">{text}</p>
+          <button
+            type="button"
+            className="metric-tooltip-popover__close"
+            aria-label="Close explanation"
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpen(false)
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
     </span>
   )
 }
