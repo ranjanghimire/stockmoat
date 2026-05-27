@@ -28,8 +28,9 @@ function pick(row: JsonRecord, keys: string[]): number | undefined {
   return undefined
 }
 
+/** Company fiscal year (e.g. NVDA FY label on the row). */
 function fiscalYearFromRow(row: JsonRecord): number | undefined {
-  let y = pick(row, ['calendarYear', 'fiscalYear', 'year'])
+  let y = pick(row, ['fiscalYear', 'calendarYear', 'year'])
   if (y !== undefined) return Math.round(y)
   const d = row.date
   if (typeof d === 'string' && d.length >= 4) {
@@ -39,6 +40,84 @@ function fiscalYearFromRow(row: JsonRecord): number | undefined {
     if (Number.isFinite(n)) return n
   }
   return undefined
+}
+
+/**
+ * Chart axis year: prefer calendar year / period-end date so Q1 FY2027 (Apr-2026) buckets as 2026.
+ */
+export function chartYearFromRow(row: JsonRecord): number | undefined {
+  const cy = pick(row, ['calendarYear'])
+  if (cy !== undefined) return Math.round(cy)
+  const d = row.date
+  if (typeof d === 'string' && d.length >= 4) {
+    const parsed = new Date(d.slice(0, 10))
+    if (!Number.isNaN(parsed.getTime())) return parsed.getUTCFullYear()
+    const n = Number(d.slice(0, 4))
+    if (Number.isFinite(n)) return n
+  }
+  return fiscalYearFromRow(row)
+}
+
+function isReportedPastQuarter(row: JsonRecord): boolean {
+  const d = row.date
+  if (typeof d === 'string' && d.length >= 10) {
+    const end = new Date(d.slice(0, 10))
+    if (!Number.isNaN(end.getTime())) {
+      const graceMs = 45 * 24 * 60 * 60 * 1000
+      if (end.getTime() > Date.now() + graceMs) return false
+    }
+  }
+  const revenue = pick(row, ['revenue', 'totalRevenue', 'revenueUSD'])
+  const eps = pick(row, ['epsdiluted', 'epsDiluted', 'eps'])
+  return revenue !== undefined || eps !== undefined
+}
+
+function countReportedQuartersForChartYear(incomeQuarterly: JsonRecord[], chartYear: number): number {
+  return quarterlyMetricMapsForChartYear(incomeQuarterly, chartYear, 'actual').size
+}
+
+/** Fiscal year with 1–3 reported quarters = current in-progress year on the chart. */
+export function detectInProgressChartYear(incomeQuarterly: JsonRecord[]): number | undefined {
+  const counts = new Map<number, number>()
+  for (const row of incomeQuarterly) {
+    if (!isReportedPastQuarter(row)) continue
+    const y = chartYearFromRow(row)
+    if (y === undefined) continue
+    counts.set(y, (counts.get(y) ?? 0) + 1)
+  }
+
+  const sorted = [...counts.entries()].sort((a, b) => b[0] - a[0])
+  for (const [y, c] of sorted) {
+    if (c > 0 && c < 4) return y
+  }
+  return undefined
+}
+
+export function resolveGrowthChartYears(
+  incomeAnnual: JsonRecord[],
+  incomeQuarterly: JsonRecord[] = [],
+): { completed: number; inProgress: number } | undefined {
+  const inProgress = detectInProgressChartYear(incomeQuarterly)
+  if (inProgress !== undefined) {
+    return { completed: inProgress - 1, inProgress }
+  }
+
+  const newest = incomeAnnual[0]
+  if (!newest) return undefined
+  const newestY = chartYearFromRow(newest)
+  if (newestY === undefined) return undefined
+
+  if (countReportedQuartersForChartYear(incomeQuarterly, newestY) >= 4) {
+    return { completed: newestY, inProgress: newestY + 1 }
+  }
+
+  const prior = incomeAnnual[1]
+  const priorY = prior ? chartYearFromRow(prior) : undefined
+  if (priorY !== undefined) {
+    return { completed: priorY, inProgress: priorY + 1 }
+  }
+
+  return { completed: newestY, inProgress: newestY + 1 }
 }
 
 function asOfFromRows(rows: JsonRecord[]): string | undefined {
@@ -58,29 +137,16 @@ function asOfFromRows(rows: JsonRecord[]): string | undefined {
 export function lastActualFiscalYearFromIncome(incomeAnnual: JsonRecord[]): number | undefined {
   const row = incomeAnnual[0]
   if (!row) return undefined
-  const y = fiscalYearFromRow(row)
+  const y = chartYearFromRow(row)
   return y !== undefined ? Math.round(y) : undefined
 }
 
-/**
- * Last fully reported fiscal year. If the newest annual row is an in-progress year
- * (< 4 reported quarters), uses the prior annual row instead.
- */
+/** Last fully reported chart year (see `resolveGrowthChartYears`). */
 export function lastCompletedFiscalYearFromIncome(
   incomeAnnual: JsonRecord[],
   incomeQuarterly: JsonRecord[] = [],
 ): number | undefined {
-  const newestFy = lastActualFiscalYearFromIncome(incomeAnnual)
-  if (newestFy === undefined) return undefined
-
-  const reportedQuarters = quarterlyMetricMapsForYear(incomeQuarterly, newestFy, 'actual').size
-  if (reportedQuarters >= 4) return newestFy
-
-  const priorRow = incomeAnnual[1]
-  const priorFy = priorRow ? fiscalYearFromRow(priorRow) : undefined
-  if (priorFy !== undefined && priorFy < newestFy) return Math.round(priorFy)
-
-  return newestFy
+  return resolveGrowthChartYears(incomeAnnual, incomeQuarterly)?.completed
 }
 
 export interface ParseForwardEstimatesOptions {
@@ -262,7 +328,7 @@ export function parseActualsFromIncome(
   const out = new Map<number, { revenueUsd?: number; eps?: number }>()
 
   for (const row of incomeAnnual) {
-    const y = fiscalYearFromRow(row)
+    const y = chartYearFromRow(row)
     if (y === undefined || !want.has(y)) continue
 
     const revenueUsd = pick(row, ['revenue', 'totalRevenue', 'revenueUSD'])
@@ -295,17 +361,20 @@ function normalizeQuarterPeriod(row: JsonRecord): string | undefined {
   return undefined
 }
 
-function quarterlyMetricMapsForYear(
+function quarterlyMetricMapsForChartYear(
   rows: JsonRecord[],
-  fiscalYear: number,
+  chartYear: number,
   kind: 'actual' | 'estimate',
 ): Map<string, { revenueUsd?: number; eps?: number }> {
   const out = new Map<string, { revenueUsd?: number; eps?: number }>()
 
   for (const row of rows) {
-    const y = fiscalYearFromRow(row)
+    if (kind === 'actual' && !isReportedPastQuarter(row)) continue
+    const y = chartYearFromRow(row)
+    const fy = fiscalYearFromRow(row)
     const q = normalizeQuarterPeriod(row)
-    if (y !== fiscalYear || !q) continue
+    if (!q) continue
+    if (y !== chartYear && fy !== chartYear) continue
 
     const revenueUsd =
       kind === 'actual'
@@ -338,12 +407,13 @@ export interface ProjectedFiscalYearMetrics {
  * plus consensus for quarters not yet reported.
  */
 export function projectInProgressFiscalYearFromQuarters(
-  fiscalYear: number,
+  chartYear: number,
   incomeQuarterly: JsonRecord[],
   analystQuarterly: JsonRecord[],
+  analystAnnual: JsonRecord[] = [],
 ): ProjectedFiscalYearMetrics | undefined {
-  const actualByQ = quarterlyMetricMapsForYear(incomeQuarterly, fiscalYear, 'actual')
-  const estByQ = quarterlyMetricMapsForYear(analystQuarterly, fiscalYear, 'estimate')
+  const actualByQ = quarterlyMetricMapsForChartYear(incomeQuarterly, chartYear, 'actual')
+  const estByQ = quarterlyMetricMapsForChartYear(analystQuarterly, chartYear, 'estimate')
 
   let revenueUsd = 0
   let eps = 0
@@ -355,15 +425,17 @@ export function projectInProgressFiscalYearFromQuarters(
   for (const q of QUARTER_ORDER) {
     const actual = actualByQ.get(q)
     const est = estByQ.get(q)
+    const quarterHasActual =
+      actual?.revenueUsd !== undefined || actual?.eps !== undefined
+    const quarterHasEstimate =
+      !quarterHasActual && (est?.revenueUsd !== undefined || est?.eps !== undefined)
 
     if (actual?.revenueUsd !== undefined) {
       revenueUsd += actual.revenueUsd
       hasRevenue = true
-      reportedQuarters += 1
     } else if (est?.revenueUsd !== undefined) {
       revenueUsd += est.revenueUsd
       hasRevenue = true
-      estimatedQuarters += 1
     }
 
     if (actual?.eps !== undefined) {
@@ -373,18 +445,48 @@ export function projectInProgressFiscalYearFromQuarters(
       eps += est.eps
       hasEps = true
     }
+
+    if (quarterHasActual) reportedQuarters += 1
+    else if (quarterHasEstimate) estimatedQuarters += 1
   }
 
   if (!hasRevenue && !hasEps) return undefined
 
-  const projectionNote =
-    reportedQuarters > 0 && estimatedQuarters > 0
-      ? `${reportedQuarters} reported + ${estimatedQuarters} est. quarters`
-      : reportedQuarters > 0
-        ? `${reportedQuarters} reported quarters`
-        : estimatedQuarters > 0
-          ? `${estimatedQuarters} est. quarters`
-          : undefined
+  const quartersFilled = reportedQuarters + estimatedQuarters
+  if (quartersFilled < 4) {
+    const annual = annualConsensusForChartYear(analystAnnual, chartYear)
+    if (annual) {
+      if (hasRevenue && annual.revenueUsd !== undefined && estimatedQuarters + reportedQuarters > 0) {
+        const knownRev = revenueUsd
+        if (knownRev < annual.revenueUsd) {
+          revenueUsd = annual.revenueUsd
+        }
+      } else if (!hasRevenue && annual.revenueUsd !== undefined) {
+        revenueUsd = annual.revenueUsd
+        hasRevenue = true
+      }
+      if (hasEps && annual.eps !== undefined) {
+        const knownEps = eps
+        if (knownEps < annual.eps) {
+          eps = annual.eps
+        }
+      } else if (!hasEps && annual.eps !== undefined) {
+        eps = annual.eps
+        hasEps = true
+      }
+    }
+  }
+
+  let projectionNote: string | undefined
+  if (reportedQuarters > 0 && estimatedQuarters > 0) {
+    projectionNote = `${reportedQuarters} reported + ${estimatedQuarters} est. quarters`
+  } else if (reportedQuarters > 0 && quartersFilled < 4) {
+    projectionNote = `${reportedQuarters} reported + annual est. for rest`
+  } else if (reportedQuarters > 0) {
+    projectionNote = `${reportedQuarters} reported quarters`
+  } else if (estimatedQuarters > 0) {
+    projectionNote = `${estimatedQuarters} est. quarters`
+  }
 
   return {
     revenueUsd: hasRevenue ? revenueUsd : undefined,
@@ -393,13 +495,13 @@ export function projectInProgressFiscalYearFromQuarters(
   }
 }
 
-function annualConsensusForYear(
+function annualConsensusForChartYear(
   analystRows: JsonRecord[],
-  fiscalYear: number,
+  chartYear: number,
 ): { revenueUsd?: number; eps?: number; revenueAnalystCount?: number; epsAnalystCount?: number } | undefined {
   for (const row of analystRows) {
-    const y = fiscalYearFromRow(row)
-    if (y !== fiscalYear) continue
+    const y = chartYearFromRow(row)
+    if (y !== chartYear) continue
     const revenueUsd = pick(row, ['estimatedRevenueAvg', 'revenueAvg', 'estimatedRevenue', 'revenueEstimate'])
     const eps = pick(row, ['estimatedEpsAvg', 'estimatedEarningsAvg', 'epsAvg', 'estimatedEps', 'eps'])
     if (revenueUsd === undefined && eps === undefined) continue
@@ -419,15 +521,16 @@ function annualConsensusForYear(
 
 function buildFiveYearGrowthCharts(
   symbol: string,
-  lastActual: number,
   incomeAnnual: JsonRecord[],
   incomeQuarterly: JsonRecord[],
   analystRows: JsonRecord[],
   analystQuarterly: JsonRecord[],
 ): ForwardGrowthCharts | undefined {
-  const completedYear = lastActual
-  const inProgressYear = lastActual + 1
-  const minForward = lastActual + 2
+  const years = resolveGrowthChartYears(incomeAnnual, incomeQuarterly)
+  if (!years) return undefined
+
+  const { completed: completedYear, inProgress: inProgressYear } = years
+  const minForward = inProgressYear + 1
 
   const points: ForwardGrowthChartPoint[] = []
 
@@ -447,6 +550,7 @@ function buildFiveYearGrowthCharts(
     inProgressYear,
     incomeQuarterly,
     analystQuarterly,
+    analystRows,
   )
   if (projected?.revenueUsd !== undefined || projected?.eps !== undefined) {
     points.push({
@@ -458,7 +562,7 @@ function buildFiveYearGrowthCharts(
       projectionNote: projected.projectionNote,
     })
   } else {
-    const fallback = annualConsensusForYear(analystRows, inProgressYear)
+    const fallback = annualConsensusForChartYear(analystRows, inProgressYear)
     if (fallback?.revenueUsd !== undefined || fallback?.eps !== undefined) {
       points.push({
         fiscalYear: inProgressYear,
@@ -499,21 +603,12 @@ export function buildForwardGrowthChartsFromPack(
   incomeQuarterly: JsonRecord[] = [],
   analystQuarterly: JsonRecord[] = [],
 ): ForwardGrowthCharts | undefined {
-  const lastActual = lastCompletedFiscalYearFromIncome(incomeAnnual, incomeQuarterly)
-
-  if (lastActual === undefined) {
+  if (resolveGrowthChartYears(incomeAnnual, incomeQuarterly) === undefined) {
     const series = parseForwardEstimatesFromFmp(symbol, analystRows, { maxYears: FORWARD_GROWTH_FORWARD_YEARS })
     return forwardEstimatesToGrowthCharts(series)
   }
 
-  return buildFiveYearGrowthCharts(
-    symbol,
-    lastActual,
-    incomeAnnual,
-    incomeQuarterly,
-    analystRows,
-    analystQuarterly,
-  )
+  return buildFiveYearGrowthCharts(symbol, incomeAnnual, incomeQuarterly, analystRows, analystQuarterly)
 }
 
 export function formatForwardEstimatesBlock(companyName: string, series: ForwardEstimatesSeries): string {

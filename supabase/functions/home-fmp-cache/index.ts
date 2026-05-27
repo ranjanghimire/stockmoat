@@ -22,7 +22,7 @@ const TTL_PACK_MS = 72 * 60 * 60 * 1000
 const TTL_QUOTE_MS = 60 * 60 * 1000
 const TTL_PEER_MS = 30 * 24 * 60 * 60 * 1000
 const TTL_FORWARD_MS = 24 * 60 * 60 * 1000
-const FMP_ANALYST_ESTIMATES_LIMIT = 10
+const FMP_ANALYST_ESTIMATES_LIMIT = 24
 
 function msSince(iso: string | null | undefined): number {
   if (!iso) return Infinity

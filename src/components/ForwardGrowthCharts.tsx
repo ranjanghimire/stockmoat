@@ -147,7 +147,7 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
             <span className="forward-growth-chart__badge">FMP analysts</span>
           </div>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">
-            Five fiscal years: last full year reported (gray), current year built from reported quarters plus
+            Five years: last full reported year (gray), current year as the sum of reported quarters plus
             consensus for remaining quarters (amber), then three forward consensus years (color).
           </p>
           <div className="forward-growth-chart__legend">
