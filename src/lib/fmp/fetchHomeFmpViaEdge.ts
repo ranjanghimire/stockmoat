@@ -1,11 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CompanyRawPack } from './fetchCompanyRawPack'
 import type { PeerMedians } from './peerMedians'
-import {
-  forwardGrowthChartsComplete,
-  forwardGrowthChartsUsable,
-  type ForwardGrowthCharts,
-} from './parseForwardEstimates'
+import { forwardGrowthChartsComplete, type ForwardGrowthCharts } from './parseForwardEstimates'
 
 /** Short client throttle so React strict mode / re-renders do not hammer the Edge Function + DB. */
 export const HOME_FMP_EDGE_CLIENT_THROTTLE_MS = 90_000

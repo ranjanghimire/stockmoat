@@ -638,7 +638,7 @@ export function forwardGrowthChartsUsable(charts: ForwardGrowthCharts | null | u
 
 /** Full five-year strip: reported + in-progress + three forward consensus years. */
 export function forwardGrowthChartsComplete(charts: ForwardGrowthCharts | null | undefined): boolean {
-  if (!forwardGrowthChartsUsable(charts)) return false
+  if (!charts || !forwardGrowthChartsUsable(charts)) return false
   const points = charts.points
   if (points.length < 5) return false
   const forwardCount = points.filter((p) => p.kind === 'estimate').length
