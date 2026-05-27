@@ -142,11 +142,14 @@ export function parseGeminiForwardJsonText(text: string): GeminiForwardEstimates
   return normalizeGeminiForwardPayload(parsed)
 }
 
-export function geminiTextFromGenerateContentResponse(raw: {
+export type GeminiGenerateContentResponse = {
   candidates?: Array<{
-    content?: { parts?: Array<{ text?: string; thought?: boolean }> } }
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> }
+    finishReason?: string
   }>
-}): string {
+}
+
+export function geminiTextFromGenerateContentResponse(raw: GeminiGenerateContentResponse): string {
   const parts = raw.candidates?.[0]?.content?.parts ?? []
   const nonThought = parts.filter((p) => p.thought !== true).map((p) => p.text ?? '').join('')
   if (nonThought.trim()) return nonThought.trim()

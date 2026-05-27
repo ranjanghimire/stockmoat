@@ -4,6 +4,7 @@ import {
   geminiTextFromGenerateContentResponse,
   parseGeminiForwardJsonText,
   type GeminiForwardEstimatesJson,
+  type GeminiGenerateContentResponse,
 } from './parseGeminiForwardJson'
 
 export type { GeminiForwardEstimatesJson }
@@ -95,7 +96,7 @@ export async function fetchGeminiForwardEstimates(
     throw new Error(`Gemini forward estimates failed (${res.status}): ${errText.slice(0, 300)}`)
   }
 
-  const raw = (await res.json()) as Parameters<typeof geminiTextFromGenerateContentResponse>[0]
+  const raw = (await res.json()) as GeminiGenerateContentResponse
   const text = geminiTextFromGenerateContentResponse(raw)
   if (!text) {
     const reason = raw.candidates?.[0] && 'finishReason' in raw.candidates[0]
