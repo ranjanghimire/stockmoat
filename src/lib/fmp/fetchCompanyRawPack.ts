@@ -9,7 +9,7 @@ import { asArray, firstRow, type JsonRecord } from './normalize'
 /** FMP free/starter plans reject `limit` > 5 on statement endpoints (402). */
 const FMP_ANNUAL_STATEMENT_LIMIT = 5
 /** Analyst estimates often need more rows to cover 3 forward FYs after filtering actuals. */
-const FMP_ANALYST_ESTIMATES_LIMIT = 10
+export const FMP_ANALYST_ESTIMATES_LIMIT = 10
 
 export interface CompanyRawPack {
   profile: JsonRecord | undefined
@@ -259,4 +259,20 @@ export async function fetchCompanyRawPack(symbol: string, apiKey: string): Promi
     score,
     peers,
   }
+}
+
+/** Lightweight fetch for forward-growth refresh (no full pack). */
+export async function fetchAnalystEstimatesAnnual(
+  symbol: string,
+  apiKey: string,
+  options?: { signal?: AbortSignal; limit?: number },
+): Promise<JsonRecord[]> {
+  const q = encodeURIComponent(symbol.toUpperCase())
+  const limit = options?.limit ?? FMP_ANALYST_ESTIMATES_LIMIT
+  const raw = await fmpGet<unknown>(
+    `/stable/analyst-estimates?symbol=${q}&period=annual&limit=${limit}`,
+    apiKey,
+    { signal: options?.signal },
+  )
+  return asArray<JsonRecord>(raw)
 }

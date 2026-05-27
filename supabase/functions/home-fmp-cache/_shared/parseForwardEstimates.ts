@@ -1,5 +1,5 @@
-import type { JsonRecord } from './normalize'
-import { num } from './normalize'
+import type { JsonRecord } from './normalize.ts'
+import { num } from './normalize.ts'
 
 export interface ForwardEstimatePoint {
   fiscalYear: number

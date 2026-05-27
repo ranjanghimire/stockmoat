@@ -1,6 +1,10 @@
 import type { CompanyFacts } from './fmp/buildCompanyFacts'
 import type { PeerMedians } from './fmp/peerMedians'
-import { buildForwardGrowthChartsFromPack, type ForwardGrowthCharts } from './fmp/parseForwardEstimates'
+import {
+  buildForwardGrowthChartsFromPack,
+  forwardGrowthChartsUsable,
+  type ForwardGrowthCharts,
+} from './fmp/parseForwardEstimates'
 import { buildValuationSummary } from './metricInterpretation/buildInterpretation'
 import type { ValuationSummary } from './metricInterpretation/types'
 import type { CompanyRawPack } from './fmp/fetchCompanyRawPack'
@@ -190,6 +194,8 @@ export function buildMoatFundamentalsSnapshot(
   pack?: CompanyRawPack,
   peers?: PeerMedians | null,
   sector?: string,
+  /** Precomputed forward charts from Postgres (home-fmp-cache); falls back to pack analyst rows. */
+  forwardGrowthFromCache?: ForwardGrowthCharts,
 ): MoatFundamentalsSnapshot {
   const base: MoatFundamentalsSnapshot = {
     revenueTtmUsd: f.revenueTtmAbsolute,
@@ -222,12 +228,16 @@ export function buildMoatFundamentalsSnapshot(
     const ar = analystRecommendationFromFmpPack(pack)
     if (ar) base.analystRecommendations = ar
 
-    const forwardGrowth = buildForwardGrowthChartsFromPack(
-      f.symbol,
-      pack.analystEstimates,
-      pack.incomeAnnual,
-    )
-    if (forwardGrowth) base.forwardGrowth = forwardGrowth
+    if (forwardGrowthChartsUsable(forwardGrowthFromCache)) {
+      base.forwardGrowth = forwardGrowthFromCache
+    } else {
+      const forwardGrowth = buildForwardGrowthChartsFromPack(
+        f.symbol,
+        pack.analystEstimates,
+        pack.incomeAnnual,
+      )
+      if (forwardGrowthChartsUsable(forwardGrowth)) base.forwardGrowth = forwardGrowth
+    }
   }
   return base
 }

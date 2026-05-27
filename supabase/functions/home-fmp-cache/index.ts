@@ -4,6 +4,11 @@ import { fetchCompanyRawPack } from './_shared/fetchCompanyRawPack.ts'
 import { fetchPeerMedians, EMPTY_PEER_MEDIANS } from './_shared/peerMedians.ts'
 import type { CompanyRawPack } from './_shared/fetchCompanyRawPack.ts'
 import type { PeerMedians } from './_shared/peerMedians.ts'
+import {
+  buildForwardGrowthChartsFromPack,
+  forwardGrowthChartsUsable,
+  type ForwardGrowthCharts,
+} from './_shared/parseForwardEstimates.ts'
 import { fmpGet } from './_shared/http.ts'
 import { asArray, firstRow, type JsonRecord } from './_shared/normalize.ts'
 import { fmpPayloadHasErrorMessage } from './_shared/profileClassification.ts'
@@ -16,6 +21,8 @@ const corsHeaders: Record<string, string> = {
 const TTL_PACK_MS = 72 * 60 * 60 * 1000
 const TTL_QUOTE_MS = 60 * 60 * 1000
 const TTL_PEER_MS = 30 * 24 * 60 * 60 * 1000
+const TTL_FORWARD_MS = 24 * 60 * 60 * 1000
+const FMP_ANALYST_ESTIMATES_LIMIT = 10
 
 function msSince(iso: string | null | undefined): number {
   if (!iso) return Infinity
@@ -28,6 +35,15 @@ async function fetchQuoteRowOnly(symbol: string, apiKey: string): Promise<JsonRe
   const raw = await fmpGet<unknown>(`/stable/quote?symbol=${q}`, apiKey)
   if (fmpPayloadHasErrorMessage(raw)) return undefined
   return firstRow(asArray<JsonRecord>(raw))
+}
+
+async function fetchAnalystEstimatesAnnual(symbol: string, apiKey: string): Promise<JsonRecord[]> {
+  const q = encodeURIComponent(symbol.toUpperCase())
+  const raw = await fmpGet<unknown>(
+    `/stable/analyst-estimates?symbol=${q}&period=annual&limit=${FMP_ANALYST_ESTIMATES_LIMIT}`,
+    apiKey,
+  )
+  return asArray<JsonRecord>(raw)
 }
 
 function mergeQuoteIntoPack(pack: CompanyRawPack, quote: JsonRecord | undefined): CompanyRawPack {
@@ -44,6 +60,15 @@ type CacheRow = {
   quote_fetched_at: string | null
   peer_medians: PeerMedians | null
   peer_medians_fetched_at: string | null
+  forward_growth_charts: ForwardGrowthCharts | null
+  forward_growth_fetched_at: string | null
+}
+
+function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
 }
 
 Deno.serve(async (req) => {
@@ -51,20 +76,14 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Method not allowed' }, 405)
   }
 
   const fmpKey = Deno.env.get('FMP_API_KEY')?.trim()
   const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim()
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim()
   if (!fmpKey || !supabaseUrl || !serviceKey) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured (FMP or Supabase secrets).' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Server misconfigured (FMP or Supabase secrets).' }, 500)
   }
 
   let body: {
@@ -72,41 +91,25 @@ Deno.serve(async (req) => {
     symbol?: string
     fetch_peers?: boolean
     force_refresh?: boolean
+    refresh_forward_growth?: boolean
   }
   try {
     body = await req.json()
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Invalid JSON body' }, 400)
   }
 
   const profileCacheKey = typeof body.profile_cache_key === 'string' ? body.profile_cache_key.trim() : ''
   const symbol = typeof body.symbol === 'string' ? body.symbol.trim().toUpperCase() : ''
   const fetchPeers = body.fetch_peers !== false
   const forceRefresh = body.force_refresh === true
+  const refreshForwardOnly = body.refresh_forward_growth === true
 
   if (!profileCacheKey || profileCacheKey.length > 512 || !symbol || !/^[A-Z0-9.-]{1,12}$/.test(symbol)) {
-    return new Response(JSON.stringify({ error: 'Invalid profile_cache_key or symbol' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Invalid profile_cache_key or symbol' }, 400)
   }
 
   const sb = createClient(supabaseUrl, serviceKey)
-
-  const meta: {
-    pack: 'db' | 'fmp'
-    quote: 'db' | 'fmp' | 'none'
-    peers: 'db' | 'fmp' | 'skipped'
-    fetched_at: { pack: string | null; quote: string | null; peers: string | null }
-  } = {
-    pack: 'db',
-    quote: 'none',
-    peers: fetchPeers ? 'db' : 'skipped',
-    fetched_at: { pack: null, quote: null, peers: null },
-  }
 
   const { data: existing, error: readErr } = await sb
     .from('ticker_fmp_home_cache')
@@ -115,13 +118,73 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (readErr) {
-    return new Response(JSON.stringify({ error: readErr.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: readErr.message }, 500)
   }
 
   const row = existing as CacheRow | null
+
+  if (refreshForwardOnly) {
+    const pack = row?.company_raw_pack
+    if (!pack?.incomeAnnual?.length) {
+      return jsonResponse({ error: 'No cached company pack; load ticker first.' }, 400)
+    }
+
+    let analystRows = pack.analystEstimates ?? []
+    let forwardMeta: 'fmp' | 'pack' = 'pack'
+    const builtFromPack = buildForwardGrowthChartsFromPack(symbol, analystRows, pack.incomeAnnual)
+    let charts = forwardGrowthChartsUsable(builtFromPack) ? builtFromPack : undefined
+
+    if (!charts) {
+      analystRows = await fetchAnalystEstimatesAnnual(symbol, fmpKey)
+      forwardMeta = 'fmp'
+      charts = buildForwardGrowthChartsFromPack(symbol, analystRows, pack.incomeAnnual)
+    }
+
+    if (!forwardGrowthChartsUsable(charts)) {
+      return jsonResponse({ ok: true, forward_growth: null, meta: { forward_growth: 'none' } })
+    }
+
+    const forwardAt = new Date().toISOString()
+    const { error: upErr } = await sb.from('ticker_fmp_home_cache').upsert(
+      {
+        profile_cache_key: profileCacheKey,
+        symbol,
+        forward_growth_charts: charts,
+        forward_growth_fetched_at: forwardAt,
+        updated_at: forwardAt,
+      },
+      { onConflict: 'profile_cache_key' },
+    )
+    if (upErr) return jsonResponse({ error: upErr.message }, 500)
+
+    return jsonResponse({
+      ok: true,
+      forward_growth: charts,
+      meta: {
+        forward_growth: forwardMeta,
+        fetched_at: { forward_growth: forwardAt },
+      },
+    })
+  }
+
+  const meta: {
+    pack: 'db' | 'fmp'
+    quote: 'db' | 'fmp' | 'none'
+    peers: 'db' | 'fmp' | 'skipped'
+    forward_growth: 'db' | 'db_stale' | 'pack' | 'fmp' | 'none'
+    fetched_at: {
+      pack: string | null
+      quote: string | null
+      peers: string | null
+      forward_growth: string | null
+    }
+  } = {
+    pack: 'db',
+    quote: 'none',
+    peers: fetchPeers ? 'db' : 'skipped',
+    forward_growth: 'none',
+    fetched_at: { pack: null, quote: null, peers: null, forward_growth: null },
+  }
 
   let pack: CompanyRawPack | null = row?.company_raw_pack ?? null
   let packAt = row?.company_raw_pack_fetched_at ?? null
@@ -129,6 +192,9 @@ Deno.serve(async (req) => {
   let quoteAt = row?.quote_fetched_at ?? null
   let peerMed: PeerMedians | null = row?.peer_medians ?? null
   let peerAt = row?.peer_medians_fetched_at ?? null
+
+  let forwardGrowth: ForwardGrowthCharts | undefined = row?.forward_growth_charts ?? undefined
+  let forwardAt = row?.forward_growth_fetched_at ?? null
 
   const packStale = forceRefresh || !pack || msSince(packAt) > TTL_PACK_MS
   const quoteStale = forceRefresh || !quoteAt || msSince(quoteAt) > TTL_QUOTE_MS
@@ -140,6 +206,9 @@ Deno.serve(async (req) => {
       msSince(peerAt) > TTL_PEER_MS ||
       (!!packAt && !!peerAt && new Date(peerAt).getTime() < new Date(packAt).getTime()))
 
+  const forwardStale =
+    forceRefresh || !forwardGrowthChartsUsable(forwardGrowth) || msSince(forwardAt) > TTL_FORWARD_MS
+
   if (packStale) {
     pack = await fetchCompanyRawPack(symbol, fmpKey)
     packAt = new Date().toISOString()
@@ -149,6 +218,22 @@ Deno.serve(async (req) => {
     meta.quote = quoteRow ? 'fmp' : 'none'
     meta.fetched_at.pack = packAt
     meta.fetched_at.quote = quoteAt
+
+    const built = buildForwardGrowthChartsFromPack(symbol, pack.analystEstimates, pack.incomeAnnual)
+    if (forwardGrowthChartsUsable(built)) {
+      forwardGrowth = built
+      forwardAt = packAt
+      meta.forward_growth = 'fmp'
+      meta.fetched_at.forward_growth = forwardAt
+    } else {
+      forwardGrowth = forwardGrowthChartsUsable(forwardGrowth) ? forwardGrowth : undefined
+      meta.forward_growth = forwardGrowth
+        ? forwardStale
+          ? 'db_stale'
+          : 'db'
+        : 'none'
+      meta.fetched_at.forward_growth = forwardAt
+    }
   } else if (quoteStale) {
     const qRow = await fetchQuoteRowOnly(symbol, fmpKey)
     quoteAt = new Date().toISOString()
@@ -157,12 +242,52 @@ Deno.serve(async (req) => {
     meta.fetched_at.pack = packAt
     meta.fetched_at.quote = quoteAt
     pack = mergeQuoteIntoPack(pack as CompanyRawPack, quoteRow)
+
+    if (forwardGrowthChartsUsable(forwardGrowth)) {
+      meta.forward_growth = forwardStale ? 'db_stale' : 'db'
+      meta.fetched_at.forward_growth = forwardAt
+    } else {
+      const built = buildForwardGrowthChartsFromPack(
+        symbol,
+        (pack as CompanyRawPack).analystEstimates,
+        (pack as CompanyRawPack).incomeAnnual,
+      )
+      if (forwardGrowthChartsUsable(built)) {
+        forwardGrowth = built
+        forwardAt = new Date().toISOString()
+        meta.forward_growth = 'pack'
+        meta.fetched_at.forward_growth = forwardAt
+      } else {
+        meta.forward_growth = 'none'
+        meta.fetched_at.forward_growth = null
+      }
+    }
   } else {
     meta.pack = 'db'
     meta.quote = quoteRow ? 'db' : 'none'
     meta.fetched_at.pack = packAt
     meta.fetched_at.quote = quoteAt
     pack = mergeQuoteIntoPack(pack as CompanyRawPack, quoteRow)
+
+    if (forwardGrowthChartsUsable(forwardGrowth)) {
+      meta.forward_growth = forwardStale ? 'db_stale' : 'db'
+      meta.fetched_at.forward_growth = forwardAt
+    } else {
+      const built = buildForwardGrowthChartsFromPack(
+        symbol,
+        (pack as CompanyRawPack).analystEstimates,
+        (pack as CompanyRawPack).incomeAnnual,
+      )
+      if (forwardGrowthChartsUsable(built)) {
+        forwardGrowth = built
+        forwardAt = new Date().toISOString()
+        meta.forward_growth = 'pack'
+        meta.fetched_at.forward_growth = forwardAt
+      } else {
+        meta.forward_growth = 'none'
+        meta.fetched_at.forward_growth = null
+      }
+    }
   }
 
   if (fetchPeers && peersStale) {
@@ -195,25 +320,22 @@ Deno.serve(async (req) => {
       quote_fetched_at: quoteAt,
       peer_medians: outPeers,
       peer_medians_fetched_at: outPeersAt,
+      forward_growth_charts: forwardGrowth ?? null,
+      forward_growth_fetched_at: forwardAt,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'profile_cache_key' },
   )
 
   if (upErr) {
-    return new Response(JSON.stringify({ error: upErr.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: upErr.message }, 500)
   }
 
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      pack,
-      peer_medians: outPeers,
-      meta,
-    }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-  )
+  return jsonResponse({
+    ok: true,
+    pack,
+    peer_medians: outPeers,
+    forward_growth: forwardGrowthChartsUsable(forwardGrowth) ? forwardGrowth : undefined,
+    meta,
+  })
 })

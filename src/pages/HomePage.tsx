@@ -14,8 +14,20 @@ import { DELAYED_PRICE_SNAPSHOT_TTL_MS } from '../lib/delayedPricePolicy'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource'
 import { buildCompanyFacts, listingCurrencyFromPack } from '../lib/fmp/buildCompanyFacts'
 import type { CompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
-import { fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
-import { fetchHomeFmpBundleViaEdge, quoteSnapshotMsFromEdgeMeta, shouldUseHomeFmpEdgeCache, type HomeFmpEdgeMeta } from '../lib/fmp/fetchHomeFmpViaEdge'
+import { fetchAnalystEstimatesAnnual, fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
+import {
+  fetchHomeFmpBundleViaEdge,
+  forwardGrowthNeedsBackgroundRefresh,
+  quoteSnapshotMsFromEdgeMeta,
+  refreshForwardGrowthChartsViaEdge,
+  shouldUseHomeFmpEdgeCache,
+  type HomeFmpEdgeMeta,
+} from '../lib/fmp/fetchHomeFmpViaEdge'
+import {
+  buildForwardGrowthChartsFromPack,
+  forwardGrowthChartsUsable,
+  type ForwardGrowthCharts,
+} from '../lib/fmp/parseForwardEstimates'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
 import {
@@ -177,6 +189,7 @@ export default function HomePage() {
       let pack: CompanyRawPack
       let peerMedians = EMPTY_PEER_MEDIANS
       let edgeQuoteMeta: HomeFmpEdgeMeta | null = null
+      let edgeForwardGrowth: ForwardGrowthCharts | undefined
 
       if (useYahoo) {
         pack = await fetchYahooCompanyPackDev(sym, { refresh: opts?.forceRefresh === true })
@@ -192,6 +205,7 @@ export default function HomePage() {
           pack = bundle.pack
           peerMedians = bundle.peer_medians
           edgeQuoteMeta = bundle.meta
+          edgeForwardGrowth = bundle.forward_growth
         } else if (fmpKey) {
           pack = await fetchCompanyRawPack(sym, fmpKey)
           peerMedians = shouldFetchFmpPeerMedians()
@@ -241,7 +255,13 @@ export default function HomePage() {
           sector: facts.sector,
           industry: facts.industry,
           dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
-          fundamentals: buildMoatFundamentalsSnapshot(facts, pack, peerSnapshot, facts.sector),
+          fundamentals: buildMoatFundamentalsSnapshot(
+            facts,
+            pack,
+            peerSnapshot,
+            facts.sector,
+            edgeForwardGrowth,
+          ),
           facts,
           peers: peerSnapshot,
         },
@@ -265,6 +285,54 @@ export default function HomePage() {
         ANALYSIS_CACHE_MAX_ENTRIES,
       )
       setAnalysis(analysisWithPrice)
+
+      const forwardCharts = analysisWithPrice.fundamentals?.forwardGrowth
+      const persistForwardToDb = edgeHomeCache && supabaseClient && forwardGrowthChartsUsable(forwardCharts)
+
+      if (persistForwardToDb && forwardGrowthNeedsBackgroundRefresh(edgeQuoteMeta, forwardCharts)) {
+        void refreshForwardGrowthChartsViaEdge({
+          supabase: supabaseClient!,
+          profileCacheKey: cacheKey,
+          symbol: sym,
+        }).then((charts) => {
+          if (!forwardGrowthChartsUsable(charts)) return
+          setAnalysis((prev) => {
+            if (!prev || prev.ticker.toUpperCase() !== sym) return prev
+            return {
+              ...prev,
+              fundamentals: prev.fundamentals
+                ? { ...prev.fundamentals, forwardGrowth: charts }
+                : { forwardGrowth: charts },
+            }
+          })
+        })
+      } else if (
+        !forwardGrowthChartsUsable(forwardCharts) &&
+        !useYahoo &&
+        fmpKey &&
+        pack.incomeAnnual.length > 0
+      ) {
+        void fetchAnalystEstimatesAnnual(sym, fmpKey).then((rows) => {
+          const charts = buildForwardGrowthChartsFromPack(sym, rows, pack.incomeAnnual)
+          if (!forwardGrowthChartsUsable(charts)) return
+          setAnalysis((prev) => {
+            if (!prev || prev.ticker.toUpperCase() !== sym) return prev
+            return {
+              ...prev,
+              fundamentals: prev.fundamentals
+                ? { ...prev.fundamentals, forwardGrowth: charts }
+                : { forwardGrowth: charts },
+            }
+          })
+          if (edgeHomeCache && supabaseClient) {
+            void refreshForwardGrowthChartsViaEdge({
+              supabase: supabaseClient,
+              profileCacheKey: cacheKey,
+              symbol: sym,
+            })
+          }
+        })
+      }
     } catch (e) {
       setAnalysis(null)
       setError(e instanceof Error ? e.message : 'Something went wrong while loading market data.')
