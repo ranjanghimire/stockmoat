@@ -196,6 +196,100 @@ function pairAnnualDividendsPerShare(
   return dps
 }
 
+const PEG_FIELD_KEYS = [
+  'pegRatio',
+  'pegRatioTTM',
+  'pegTTM',
+  'peg',
+  'priceEarningsToGrowthRatioTTM',
+  'priceEarningsToGrowthRatio',
+  'priceToEarningsGrowthRatioTTM',
+] as const
+
+/** FMP growth fields may be decimal (0.18) or percent points (18). */
+function normalizeGrowthPercent(v: number | undefined): number | undefined {
+  if (v === undefined || !Number.isFinite(v)) return undefined
+  if (Math.abs(v) <= 2.5) return v * 100
+  return v
+}
+
+function epsGrowthPercentForPeg(
+  km: JsonRecord | undefined,
+  r: JsonRecord | undefined,
+  annualEps: number[],
+  analystEstimates: JsonRecord[],
+): number | undefined {
+  const fromFmp = normalizeGrowthPercent(
+    pick(km, [
+      'epsGrowthTTM',
+      'netIncomePerShareGrowthTTM',
+      'netIncomeGrowthTTM',
+      'threeYNetIncomeGrowthPerShare',
+      'earningsGrowthTTM',
+      'epsGrowth',
+      'netIncomeGrowth',
+      'earningsGrowth',
+      'netIncomePerShareGrowth',
+    ]) ??
+      pick(r, [
+        'epsGrowthTTM',
+        'netIncomePerShareGrowthTTM',
+        'netIncomeGrowthTTM',
+        'epsGrowth',
+        'netIncomeGrowth',
+        'earningsGrowth',
+        'netIncomePerShareGrowth',
+      ]),
+  )
+  if (fromFmp !== undefined && fromFmp > 0) return fromFmp
+
+  if (annualEps.length >= 2) {
+    const e0 = annualEps[0]!
+    const e1 = annualEps[1]!
+    if (e0 > 0 && e1 > 0 && e0 > e1) {
+      return ((e0 - e1) / e1) * 100
+    }
+  }
+
+  const byYear: { year: number; eps: number }[] = []
+  for (const row of analystEstimates) {
+    let y = pick(row, ['calendarYear', 'fiscalYear', 'year'])
+    if (y === undefined) {
+      const d = row.date
+      if (typeof d === 'string' || typeof d === 'number') {
+        const parsed = new Date(String(d))
+        if (!Number.isNaN(parsed.getTime())) y = parsed.getFullYear()
+      }
+    }
+    const eps = pick(row, ['estimatedEpsAvg', 'estimatedEarningsAvg', 'epsAvg', 'estimatedEps', 'eps'])
+    if (y === undefined || eps === undefined || eps <= 0) continue
+    byYear.push({ year: y, eps })
+  }
+  byYear.sort((a, b) => a.year - b.year)
+  for (let i = 1; i < byYear.length; i++) {
+    const prev = byYear[i - 1]!
+    const next = byYear[i]!
+    if (next.eps > prev.eps) {
+      return ((next.eps - prev.eps) / prev.eps) * 100
+    }
+  }
+
+  return undefined
+}
+
+function computePegFallback(
+  pe: number | undefined,
+  km: JsonRecord | undefined,
+  r: JsonRecord | undefined,
+  annualEps: number[],
+  analystEstimates: JsonRecord[],
+): number | undefined {
+  if (pe === undefined || !Number.isFinite(pe) || pe <= 0) return undefined
+  const growthPct = epsGrowthPercentForPeg(km, r, annualEps, analystEstimates)
+  if (growthPct === undefined || growthPct <= 0) return undefined
+  return pe / growthPct
+}
+
 export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): CompanyFacts {
   const p = pack.profile
   const q = pack.quote
@@ -283,7 +377,10 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   }
 
   const priceToBook = pick(km, ['pbRatio', 'priceToBookRatio']) ?? pick(r, ['priceToBookRatio'])
-  const pegRatio = pick(km, ['pegRatio']) ?? pick(r, ['pegRatio'])
+  let pegRatio =
+    pick(q, [...PEG_FIELD_KEYS]) ??
+    pick(km, [...PEG_FIELD_KEYS]) ??
+    pick(r, [...PEG_FIELD_KEYS])
   const dividendYield = pick(km, ['dividendYield']) ?? pick(r, ['dividendYield'])
 
   let enterpriseValue =
@@ -651,6 +748,10 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     if (epsTtm !== undefined && epsTtm > 0) {
       peTrailing = price / epsTtm
     }
+  }
+
+  if (pegRatio === undefined || !Number.isFinite(pegRatio) || pegRatio <= 0) {
+    pegRatio = computePegFallback(peTrailing, km, r, annualEps, pack.analystEstimates)
   }
 
   return {
