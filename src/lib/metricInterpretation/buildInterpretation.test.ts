@@ -18,11 +18,8 @@ describe('buildMetricInterpretation', () => {
       hints: { subjectValue: 137.61, peerMedian: 41.69 },
     }
     const i = buildMetricInterpretation('ev_to_ebit_vs_peer', ev, {
-      id: 'ev_to_ebit_vs_peer',
       mode: 'score',
       peer_relative: true,
-      pillar: 'valuation',
-      pillar_weight: 0.04,
     })
     expect(i.verdict).toBe('weak')
     expect(i.formattedValue).toContain('137.61')
@@ -40,11 +37,8 @@ describe('buildMetricInterpretation', () => {
       hints: { subjectValue: 0.07, peerMedian: 0.12 },
     }
     const i = buildMetricInterpretation('roic_vs_peer', ev, {
-      id: 'roic_vs_peer',
       mode: 'score',
       peer_relative: true,
-      pillar: 'quality',
-      pillar_weight: 0.05,
     })
     expect(i.formattedValue).toContain('7.00%')
     expect(i.peerFormatted).toContain('12.00%')
@@ -59,10 +53,7 @@ describe('buildMetricInterpretation', () => {
       hints: { absoluteValue: 0.01, valueUnit: 'multiple' },
     }
     const i = buildMetricInterpretation('peg_ttm', ev, {
-      id: 'peg_ttm',
       mode: 'score',
-      pillar: 'valuation',
-      pillar_weight: 0.04,
     })
     expect(i.formattedValue).toBe('0.01×')
     expect(i.meterPosition).toBeGreaterThan(0.9)
@@ -80,6 +71,7 @@ describe('buildValuationSummary', () => {
         annualEps: [],
         annualGrossMargin: [],
         annualRevenue: [],
+        annualEfficiencyRatio: [],
         peTrailing: 28,
         pegRatio: 1.1,
       },

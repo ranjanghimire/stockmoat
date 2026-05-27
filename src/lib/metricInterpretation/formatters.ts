@@ -25,7 +25,11 @@ export function formatMetricValue(
   }
 }
 
-export function formatPeerRatio(subject?: number, peer?: number, unit: MetricValueUnit = 'multiple'): string {
+export function formatPeerRatio(
+  subject?: number,
+  peer?: number,
+  _unit: MetricValueUnit = 'multiple',
+): string {
   if (
     subject === undefined ||
     peer === undefined ||
