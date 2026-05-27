@@ -2,7 +2,7 @@ import type { CompanyFacts } from './fmp/buildCompanyFacts'
 import type { PeerMedians } from './fmp/peerMedians'
 import {
   buildForwardGrowthChartsFromPack,
-  forwardGrowthChartsUsable,
+  preferPackBuiltForwardGrowth,
   type ForwardGrowthCharts,
 } from './fmp/parseForwardEstimates'
 import { buildValuationSummary } from './metricInterpretation/buildInterpretation'
@@ -228,18 +228,15 @@ export function buildMoatFundamentalsSnapshot(
     const ar = analystRecommendationFromFmpPack(pack)
     if (ar) base.analystRecommendations = ar
 
-    if (forwardGrowthChartsUsable(forwardGrowthFromCache)) {
-      base.forwardGrowth = forwardGrowthFromCache
-    } else {
-      const forwardGrowth = buildForwardGrowthChartsFromPack(
-        f.symbol,
-        pack.analystEstimates,
-        pack.incomeAnnual,
-        pack.incomeQuarterly,
-        pack.analystEstimatesQuarterly ?? [],
-      )
-      if (forwardGrowthChartsUsable(forwardGrowth)) base.forwardGrowth = forwardGrowth
-    }
+    const forwardFromPack = buildForwardGrowthChartsFromPack(
+      f.symbol,
+      pack.analystEstimates,
+      pack.incomeAnnual,
+      pack.incomeQuarterly,
+      pack.analystEstimatesQuarterly ?? [],
+    )
+    const forwardGrowth = preferPackBuiltForwardGrowth(forwardGrowthFromCache, forwardFromPack)
+    if (forwardGrowth) base.forwardGrowth = forwardGrowth
   }
   return base
 }

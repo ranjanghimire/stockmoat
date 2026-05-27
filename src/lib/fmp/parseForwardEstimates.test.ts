@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildForwardGrowthChartsFromPack,
   chartYearFromRow,
   detectInProgressChartYear,
   formatForwardEstimatesBlock,
+  forwardGrowthChartsComplete,
+  preferPackBuiltForwardGrowth,
   parseForwardEstimatesFromFmp,
   projectInProgressFiscalYearFromQuarters,
   resolveGrowthChartYears,
@@ -26,6 +28,7 @@ const META_INCOME_Q_2026 = [
 ]
 
 const META_ANALYST_Q_2026 = [
+  { calendarYear: 2026, period: 'Q2', date: '2026-06-30', estimatedRevenueAvg: 41_000_000_000, estimatedEpsAvg: 4.1 },
   { calendarYear: 2026, period: 'Q3', date: '2026-09-30', estimatedRevenueAvg: 45_000_000_000, estimatedEpsAvg: 4.5 },
   { calendarYear: 2026, period: 'Q4', date: '2026-12-31', estimatedRevenueAvg: 48_000_000_000, estimatedEpsAvg: 4.8 },
 ]
@@ -70,13 +73,49 @@ describe('parseForwardEstimatesFromFmp', () => {
   })
 
   it('projectInProgressFiscalYearFromQuarters sums four quarters (NVDA-style)', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'))
     const projected = projectInProgressFiscalYearFromQuarters(2026, [NVDA_Q1], NVDA_Q_EST_2026)
     expect(projected?.eps).toBeCloseTo(11.4, 2)
     expect(projected?.projectionNote).toContain('1 reported')
     expect(projected?.projectionNote).toContain('3 est.')
+    vi.useRealTimers()
+  })
+
+  it('ignores income rows for quarters that have not ended yet', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'))
+    const income = [
+      { calendarYear: 2026, period: 'Q1', date: '2026-03-31', revenue: 10, epsdiluted: 1 },
+      { calendarYear: 2026, period: 'Q2', date: '2026-06-30', revenue: 99, epsdiluted: 9 },
+    ]
+    const projected = projectInProgressFiscalYearFromQuarters(2026, income, META_ANALYST_Q_2026)
+    expect(projected?.projectionNote).toContain('1 reported')
+    expect(projected?.projectionNote).not.toContain('4 reported')
+    vi.useRealTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('preferPackBuiltForwardGrowth uses complete pack over stale cache', () => {
+    const stale = buildForwardGrowthChartsFromPack('META', [], META_INCOME_ANNUAL, [], [])
+    const full = buildForwardGrowthChartsFromPack(
+      'META',
+      META_ANALYST_ROWS,
+      META_INCOME_ANNUAL,
+      META_INCOME_Q_2026,
+      META_ANALYST_Q_2026,
+    )
+    expect(forwardGrowthChartsComplete(stale)).toBe(false)
+    expect(forwardGrowthChartsComplete(full)).toBe(true)
+    expect(preferPackBuiltForwardGrowth(stale, full)).toBe(full)
   })
 
   it('buildForwardGrowthChartsFromPack shows 2025–2029', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'))
     const charts = buildForwardGrowthChartsFromPack(
       'META',
       META_ANALYST_ROWS,
@@ -92,6 +131,8 @@ describe('parseForwardEstimatesFromFmp', () => {
       { fy: 2029, kind: 'estimate' },
     ])
     expect(charts?.points[1]?.eps).toBeCloseTo(17.4, 1)
+    expect(charts?.points[1]?.projectionNote).toContain('1 reported')
+    vi.useRealTimers()
   })
 
   it('minForwardFiscalYear keeps 2027–2029 when last actual is 2025', () => {

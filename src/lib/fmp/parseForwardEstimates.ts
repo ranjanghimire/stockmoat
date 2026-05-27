@@ -62,10 +62,7 @@ function isReportedPastQuarter(row: JsonRecord): boolean {
   const d = row.date
   if (typeof d === 'string' && d.length >= 10) {
     const end = new Date(d.slice(0, 10))
-    if (!Number.isNaN(end.getTime())) {
-      const graceMs = 45 * 24 * 60 * 60 * 1000
-      if (end.getTime() > Date.now() + graceMs) return false
-    }
+    if (!Number.isNaN(end.getTime()) && end.getTime() > Date.now()) return false
   }
   const revenue = pick(row, ['revenue', 'totalRevenue', 'revenueUSD'])
   const eps = pick(row, ['epsdiluted', 'epsDiluted', 'eps'])
@@ -363,12 +360,23 @@ function normalizeQuarterPeriod(row: JsonRecord): string | undefined {
   return undefined
 }
 
+function quarterPeriodEndFromRow(row: JsonRecord): string | undefined {
+  const d = row.date
+  return typeof d === 'string' && d.length >= 10 ? d.slice(0, 10) : undefined
+}
+
+function quarterPeriodEndIsPast(periodEnd: string | undefined): boolean {
+  if (!periodEnd) return true
+  const end = new Date(periodEnd)
+  return !Number.isNaN(end.getTime()) && end.getTime() <= Date.now()
+}
+
 function quarterlyMetricMapsForChartYear(
   rows: JsonRecord[],
   chartYear: number,
   kind: 'actual' | 'estimate',
-): Map<string, { revenueUsd?: number; eps?: number }> {
-  const out = new Map<string, { revenueUsd?: number; eps?: number }>()
+): Map<string, { revenueUsd?: number; eps?: number; periodEnd?: string }> {
+  const out = new Map<string, { revenueUsd?: number; eps?: number; periodEnd?: string }>()
 
   for (const row of rows) {
     if (kind === 'actual' && !isReportedPastQuarter(row)) continue
@@ -392,6 +400,7 @@ function quarterlyMetricMapsForChartYear(
     const cur = out.get(q) ?? {}
     if (revenueUsd !== undefined) cur.revenueUsd = revenueUsd
     if (eps !== undefined) cur.eps = eps
+    cur.periodEnd = quarterPeriodEndFromRow(row) ?? cur.periodEnd
     out.set(q, cur)
   }
 
@@ -427,12 +436,13 @@ export function projectInProgressFiscalYearFromQuarters(
   for (const q of QUARTER_ORDER) {
     const actual = actualByQ.get(q)
     const est = estByQ.get(q)
-    const quarterHasActual =
-      actual?.revenueUsd !== undefined || actual?.eps !== undefined
+    const actualCounts =
+      quarterPeriodEndIsPast(actual?.periodEnd) &&
+      (actual?.revenueUsd !== undefined || actual?.eps !== undefined)
     const quarterHasEstimate =
-      !quarterHasActual && (est?.revenueUsd !== undefined || est?.eps !== undefined)
+      !actualCounts && (est?.revenueUsd !== undefined || est?.eps !== undefined)
 
-    if (actual?.revenueUsd !== undefined) {
+    if (actualCounts && actual?.revenueUsd !== undefined) {
       revenueUsd += actual.revenueUsd
       hasRevenue = true
     } else if (est?.revenueUsd !== undefined) {
@@ -440,7 +450,7 @@ export function projectInProgressFiscalYearFromQuarters(
       hasRevenue = true
     }
 
-    if (actual?.eps !== undefined) {
+    if (actualCounts && actual?.eps !== undefined) {
       eps += actual.eps
       hasEps = true
     } else if (est?.eps !== undefined) {
@@ -448,7 +458,7 @@ export function projectInProgressFiscalYearFromQuarters(
       hasEps = true
     }
 
-    if (quarterHasActual) reportedQuarters += 1
+    if (actualCounts) reportedQuarters += 1
     else if (quarterHasEstimate) estimatedQuarters += 1
   }
 
@@ -624,6 +634,26 @@ function buildFiveYearGrowthCharts(
 
 export function forwardGrowthChartsUsable(charts: ForwardGrowthCharts | null | undefined): boolean {
   return !!charts?.points?.some((p) => p.revenueUsd !== undefined || p.eps !== undefined)
+}
+
+/** Full five-year strip: reported + in-progress + three forward consensus years. */
+export function forwardGrowthChartsComplete(charts: ForwardGrowthCharts | null | undefined): boolean {
+  if (!forwardGrowthChartsUsable(charts)) return false
+  const points = charts.points
+  if (points.length < 5) return false
+  const forwardCount = points.filter((p) => p.kind === 'estimate').length
+  return forwardCount >= 3
+}
+
+export function preferPackBuiltForwardGrowth(
+  fromCache: ForwardGrowthCharts | undefined,
+  fromPack: ForwardGrowthCharts | undefined,
+): ForwardGrowthCharts | undefined {
+  if (forwardGrowthChartsComplete(fromPack)) return fromPack
+  if (forwardGrowthChartsComplete(fromCache)) return fromCache
+  if (forwardGrowthChartsUsable(fromPack)) return fromPack
+  if (forwardGrowthChartsUsable(fromCache)) return fromCache
+  return undefined
 }
 
 export function buildForwardGrowthChartsFromPack(

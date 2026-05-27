@@ -1,7 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CompanyRawPack } from './fetchCompanyRawPack'
 import type { PeerMedians } from './peerMedians'
-import { forwardGrowthChartsUsable, type ForwardGrowthCharts } from './parseForwardEstimates'
+import {
+  forwardGrowthChartsComplete,
+  forwardGrowthChartsUsable,
+  type ForwardGrowthCharts,
+} from './parseForwardEstimates'
 
 /** Short client throttle so React strict mode / re-renders do not hammer the Edge Function + DB. */
 export const HOME_FMP_EDGE_CLIENT_THROTTLE_MS = 90_000
@@ -160,10 +164,8 @@ export function forwardGrowthNeedsBackgroundRefresh(
   charts: ForwardGrowthCharts | undefined,
 ): boolean {
   if (!meta) return false
+  if (!forwardGrowthChartsComplete(charts)) return true
   if (meta.forward_growth === 'db_stale') return true
-  if (meta.forward_growth === 'db' || meta.forward_growth === 'fmp' || meta.forward_growth === 'pack') {
-    return false
-  }
   if (meta.forward_growth === 'none') return true
-  return !forwardGrowthChartsUsable(charts)
+  return false
 }

@@ -6,6 +6,7 @@ import type { CompanyRawPack } from './_shared/fetchCompanyRawPack.ts'
 import type { PeerMedians } from './_shared/peerMedians.ts'
 import {
   buildForwardGrowthChartsFromPack,
+  forwardGrowthChartsComplete,
   forwardGrowthChartsUsable,
   type ForwardGrowthCharts,
 } from './_shared/parseForwardEstimates.ts'
@@ -230,7 +231,19 @@ Deno.serve(async (req) => {
       (!!packAt && !!peerAt && new Date(peerAt).getTime() < new Date(packAt).getTime()))
 
   const forwardStale =
-    forceRefresh || !forwardGrowthChartsUsable(forwardGrowth) || msSince(forwardAt) > TTL_FORWARD_MS
+    forceRefresh ||
+    !forwardGrowthChartsComplete(forwardGrowth) ||
+    msSince(forwardAt) > TTL_FORWARD_MS
+
+  function rebuildForwardFromPack(p: CompanyRawPack): ForwardGrowthCharts | undefined {
+    return buildForwardGrowthChartsFromPack(
+      symbol,
+      p.analystEstimates,
+      p.incomeAnnual,
+      p.incomeQuarterly ?? [],
+      p.analystEstimatesQuarterly ?? [],
+    )
+  }
 
   if (packStale) {
     pack = await fetchCompanyRawPack(symbol, fmpKey)
@@ -272,26 +285,23 @@ Deno.serve(async (req) => {
     meta.fetched_at.quote = quoteAt
     pack = mergeQuoteIntoPack(pack as CompanyRawPack, quoteRow)
 
-    if (forwardGrowthChartsUsable(forwardGrowth)) {
-      meta.forward_growth = forwardStale ? 'db_stale' : 'db'
-      meta.fetched_at.forward_growth = forwardAt
-    } else {
-      const built = buildForwardGrowthChartsFromPack(
-        symbol,
-        (pack as CompanyRawPack).analystEstimates,
-        (pack as CompanyRawPack).incomeAnnual,
-        (pack as CompanyRawPack).incomeQuarterly ?? [],
-        (pack as CompanyRawPack).analystEstimatesQuarterly ?? [],
-      )
+    if (!forwardGrowthChartsComplete(forwardGrowth)) {
+      const built = rebuildForwardFromPack(pack as CompanyRawPack)
       if (forwardGrowthChartsUsable(built)) {
         forwardGrowth = built
         forwardAt = new Date().toISOString()
         meta.forward_growth = 'pack'
         meta.fetched_at.forward_growth = forwardAt
+      } else if (forwardGrowthChartsUsable(forwardGrowth)) {
+        meta.forward_growth = forwardStale ? 'db_stale' : 'db'
+        meta.fetched_at.forward_growth = forwardAt
       } else {
         meta.forward_growth = 'none'
         meta.fetched_at.forward_growth = null
       }
+    } else {
+      meta.forward_growth = forwardStale ? 'db_stale' : 'db'
+      meta.fetched_at.forward_growth = forwardAt
     }
   } else {
     meta.pack = 'db'
@@ -300,26 +310,23 @@ Deno.serve(async (req) => {
     meta.fetched_at.quote = quoteAt
     pack = mergeQuoteIntoPack(pack as CompanyRawPack, quoteRow)
 
-    if (forwardGrowthChartsUsable(forwardGrowth)) {
-      meta.forward_growth = forwardStale ? 'db_stale' : 'db'
-      meta.fetched_at.forward_growth = forwardAt
-    } else {
-      const built = buildForwardGrowthChartsFromPack(
-        symbol,
-        (pack as CompanyRawPack).analystEstimates,
-        (pack as CompanyRawPack).incomeAnnual,
-        (pack as CompanyRawPack).incomeQuarterly ?? [],
-        (pack as CompanyRawPack).analystEstimatesQuarterly ?? [],
-      )
+    if (!forwardGrowthChartsComplete(forwardGrowth)) {
+      const built = rebuildForwardFromPack(pack as CompanyRawPack)
       if (forwardGrowthChartsUsable(built)) {
         forwardGrowth = built
         forwardAt = new Date().toISOString()
         meta.forward_growth = 'pack'
         meta.fetched_at.forward_growth = forwardAt
+      } else if (forwardGrowthChartsUsable(forwardGrowth)) {
+        meta.forward_growth = forwardStale ? 'db_stale' : 'db'
+        meta.fetched_at.forward_growth = forwardAt
       } else {
         meta.forward_growth = 'none'
         meta.fetched_at.forward_growth = null
       }
+    } else {
+      meta.forward_growth = forwardStale ? 'db_stale' : 'db'
+      meta.fetched_at.forward_growth = forwardAt
     }
   }
 
