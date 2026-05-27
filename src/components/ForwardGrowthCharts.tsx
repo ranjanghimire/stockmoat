@@ -33,19 +33,28 @@ function yoyPct(cur?: number, prev?: number): string | undefined {
   return `${sign}${pct.toFixed(1)}% YoY`
 }
 
+function barClassForPoint(point: ForwardGrowthChartPoint, estimateMetricClass: string): string {
+  if (point.kind === 'actual') {
+    return estimateMetricClass.includes('eps')
+      ? 'forward-growth-chart__bar--actual forward-growth-chart__bar--eps'
+      : 'forward-growth-chart__bar--actual'
+  }
+  return `forward-growth-chart__bar ${estimateMetricClass}`.trim()
+}
+
 function ForwardBarGroup({
   title,
   points,
   values,
   formatValue,
-  barClassName,
+  estimateMetricClass,
   analystLabel,
 }: {
   title: string
   points: ForwardGrowthChartPoint[]
   values: Array<number | undefined>
   formatValue: (v: number | undefined) => string
-  barClassName: string
+  estimateMetricClass: string
   analystLabel?: (p: ForwardGrowthChartPoint) => string | undefined
 }) {
   const heights = useMemo(() => barPercents(values), [values])
@@ -66,9 +75,17 @@ function ForwardBarGroup({
             <div key={`${p.fiscalYear}-${title}`} className="forward-growth-chart__column">
               <div className="forward-growth-chart__bar-area">
                 <div
-                  className={`forward-growth-chart__bar ${barClassName}`}
+                  className={barClassForPoint(p, estimateMetricClass)}
                   style={{ height: `${barRem}rem` }}
-                  title={[p.label, formatValue(v), yoy, analysts].filter(Boolean).join(' · ')}
+                  title={[
+                    p.label,
+                    p.kind === 'actual' ? 'Reported' : 'Consensus',
+                    formatValue(v),
+                    yoy,
+                    analysts,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 />
               </div>
               <div className="forward-growth-chart__labels">
@@ -116,9 +133,23 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
             <span className="forward-growth-chart__badge">FMP analysts</span>
           </div>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">
-            Wall Street consensus for upcoming fiscal years — not historical actuals. Revenue and EPS are shown
-            separately; YoY % compares one estimate year to the next.
+            Five fiscal years at a glance: two reported years from financial statements (gray) and three forward
+            analyst consensus years (color). YoY % compares each bar to the prior year.
           </p>
+          <div className="forward-growth-chart__legend">
+            <span className="forward-growth-chart__legend-item">
+              <span className="forward-growth-chart__legend-swatch forward-growth-chart__legend-swatch--actual" />
+              Reported
+            </span>
+            <span className="forward-growth-chart__legend-item">
+              <span className="forward-growth-chart__legend-swatch forward-growth-chart__legend-swatch--revenue" />
+              Consensus (revenue)
+            </span>
+            <span className="forward-growth-chart__legend-item">
+              <span className="forward-growth-chart__legend-swatch forward-growth-chart__legend-swatch--eps" />
+              Consensus (EPS)
+            </span>
+          </div>
         </div>
         {charts.asOf ? (
           <p className="shrink-0 text-[10px] text-slate-500">Estimate rows through {charts.asOf}</p>
@@ -128,31 +159,35 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
       <div className={`grid gap-4 p-4 ${hasRevenue && hasEps ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
         {hasRevenue ? (
           <ForwardBarGroup
-            title="Revenue (consensus)"
+            title="Revenue"
             points={points}
             values={revenueValues}
             formatValue={(v) => (v === undefined ? '—' : formatUsd(v))}
-            barClassName=""
+            estimateMetricClass=""
             analystLabel={(p) =>
-              p.revenueAnalystCount !== undefined ? `${p.revenueAnalystCount} analysts` : undefined
+              p.kind === 'estimate' && p.revenueAnalystCount !== undefined
+                ? `${p.revenueAnalystCount} analysts`
+                : undefined
             }
           />
         ) : null}
         {hasEps ? (
           <ForwardBarGroup
-            title="EPS (consensus)"
+            title="EPS"
             points={points}
             values={epsValues}
             formatValue={(v) => (v === undefined ? '—' : `$${v!.toFixed(2)}`)}
-            barClassName="forward-growth-chart__bar--eps"
-            analystLabel={(p) => (p.epsAnalystCount !== undefined ? `${p.epsAnalystCount} analysts` : undefined)}
+            estimateMetricClass="forward-growth-chart__bar--eps"
+            analystLabel={(p) =>
+              p.kind === 'estimate' && p.epsAnalystCount !== undefined ? `${p.epsAnalystCount} analysts` : undefined
+            }
           />
         ) : null}
       </div>
 
       <p className="border-t border-sky-100/90 px-4 py-2 text-[11px] leading-snug text-slate-500">
-        Source: Financial Modeling Prep analyst-estimates (annual). Figures are illustrative consensus, not company
-        guidance or investment advice.
+        Source: FMP annual income statements (reported) and analyst-estimates (consensus). Not company guidance or
+        investment advice.
       </p>
     </section>
   )
