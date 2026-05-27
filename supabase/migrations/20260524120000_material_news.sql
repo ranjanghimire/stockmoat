@@ -18,26 +18,20 @@ create table if not exists public.material_news (
   created_at timestamptz not null default now(),
   constraint material_news_source_url_unique unique (source_url)
 );
-
 create index if not exists material_news_published_at_desc on public.material_news (published_at desc);
 create index if not exists material_news_lane_ids_gin on public.material_news using gin (lane_ids);
 create index if not exists material_news_tickers_gin on public.material_news using gin (tickers);
-
 alter table public.material_news enable row level security;
-
 drop policy if exists "material_news_select_anon" on public.material_news;
 create policy "material_news_select_anon" on public.material_news
   for select to anon, authenticated using (true);
-
 grant select on public.material_news to anon, authenticated;
-
 -- Dedupe / ingest bookkeeping (service role writes).
 create table if not exists public.news_seen_candidates (
   fingerprint text primary key,
   source_url text,
   seen_at timestamptz not null default now()
 );
-
 alter table public.news_seen_candidates enable row level security;
 -- No anon policies — service role only.
 
@@ -48,17 +42,13 @@ create table if not exists public.news_pipeline_state (
   last_stats jsonb,
   updated_at timestamptz not null default now()
 );
-
 alter table public.news_pipeline_state enable row level security;
-
 insert into public.news_pipeline_state (id) values ('main')
 on conflict (id) do nothing;
-
 -- Ticker → SEC CIK cache (populated by pipeline).
 create table if not exists public.news_ticker_cik (
   symbol text primary key,
   cik text not null,
   updated_at timestamptz not null default now()
 );
-
 alter table public.news_ticker_cik enable row level security;

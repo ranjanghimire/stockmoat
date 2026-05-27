@@ -6,14 +6,9 @@ create table if not exists public.screen_charts (
   fetch_error text,
   updated_at timestamptz not null default now()
 );
-
 create index if not exists screen_charts_updated_at on public.screen_charts (updated_at desc);
-
 alter table public.screen_charts enable row level security;
-
 drop policy if exists "screen_charts_select_anon" on public.screen_charts;
 create policy "screen_charts_select_anon" on public.screen_charts for select to anon, authenticated using (true);
-
 grant select on public.screen_charts to anon, authenticated;
-
--- Writes: service role from nightly-screen-charts script (bypasses RLS).
+-- Writes: service role from nightly-screen-charts script (bypasses RLS).;

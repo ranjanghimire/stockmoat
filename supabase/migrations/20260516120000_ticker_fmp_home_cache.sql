@@ -13,9 +13,6 @@ create table if not exists public.ticker_fmp_home_cache (
   lock_until timestamptz,
   updated_at timestamptz not null default now()
 );
-
 create index if not exists ticker_fmp_home_cache_symbol_idx on public.ticker_fmp_home_cache (symbol);
-
 alter table public.ticker_fmp_home_cache enable row level security;
-
--- Intentionally no SELECT/INSERT policies for anon/authenticated: only service role (Edge) may access.
+-- Intentionally no SELECT/INSERT policies for anon/authenticated: only service role (Edge) may access.;

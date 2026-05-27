@@ -2,7 +2,6 @@
 
 alter table public.company_moat_summaries
   add column if not exists how_they_make_money_body text;
-
 update public.company_moat_summaries
 set
   how_they_make_money_body =
