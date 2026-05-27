@@ -2,7 +2,8 @@
  * Compare FMP analyst-estimates vs Gemini forward consensus for tickers.
  *
  * Usage (from repo root, with .env.local):
- *   npx vite-node scripts/spike-forward-estimates-compare.ts META AAPL PLTR
+ *   npm run spike:forward -- META AAPL PLTR
+ *   (requires `npm install` so node_modules/vite-node exists)
  *
  * Env: fmpApiKey or FMP_API_KEY; optional GEMINI_API_KEY for fallback comparison.
  */

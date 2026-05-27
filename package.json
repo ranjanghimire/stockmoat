@@ -18,7 +18,7 @@
     "sync:edge-fmp-shared": "mkdir -p supabase/functions/home-fmp-cache/_shared && cp src/lib/fmp/normalize.ts supabase/functions/home-fmp-cache/_shared/normalize.ts && cp src/lib/fmp/profileClassification.ts supabase/functions/home-fmp-cache/_shared/profileClassification.ts && cp src/lib/fmp/fetchCompanyRawPack.ts supabase/functions/home-fmp-cache/_shared/fetchCompanyRawPack.ts && cp src/lib/fmp/peerMedians.ts supabase/functions/home-fmp-cache/_shared/peerMedians.ts && node scripts/patch-edge-shared-imports.mjs",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:unit": "vitest run --config vitest.config.ts",
-    "spike:forward-estimates": "vite-node scripts/spike-forward-estimates-compare.ts",
+    "spike:forward-estimates": "node ./node_modules/vite-node/dist/cli.mjs scripts/spike-forward-estimates-compare.ts",
     "spike:forward": "npm run spike:forward-estimates --",
     "test:forward-estimates": "vitest run --config vitest.integration.config.ts src/lib/fmp/parseForwardEstimates.integration.test.ts"
   },
