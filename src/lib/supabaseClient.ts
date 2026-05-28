@@ -17,6 +17,11 @@ export interface ScreenScoreRow {
   updated_at: string
 }
 
+/** Row from `screen_screener_list` view (scores + next earnings). */
+export interface ScreenScreenerRow extends ScreenScoreRow {
+  next_earnings_date: string | null
+}
+
 /** Row from `screen_charts` (nightly FMP payload for Screener). */
 export interface ScreenChartRow {
   symbol: string

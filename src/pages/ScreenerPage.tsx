@@ -1,16 +1,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PriceChartsPanel } from '../components/PriceChartsPanel'
-import { getSupabaseBrowserClient, type ScreenChartRow, type ScreenScoreRow } from '../lib/supabaseClient'
+import { ScreenerSortableHeader, type ScreenerSortableColumn } from '../components/ScreenerSortableHeader'
+import { formatNextEarningsDisplay } from '../lib/fmp/fetchFmpNextEarningsDate'
 import { fetchForwardGrowthCagrUniverse, percentileForwardGrowthScores } from '../lib/fmp/forwardRevenueGrowthScore'
+import {
+  getSupabaseBrowserClient,
+  type ScreenChartRow,
+  type ScreenScoreRow,
+  type ScreenScreenerRow,
+} from '../lib/supabaseClient'
 import type { PriceChartsPayload } from '../lib/yahoo/weeklyChartTypes'
+import './screenerPage.css'
 
 const PAGE_SIZE = 25
 
-const LIST_COLUMNS =
-  'symbol, display_name, score, forward_rev_cagr_3y, forward_growth_score, profile_id, sector, industry, any_gate_fail, score_cap, raw_weighted, updated_at'
+const SCREENER_TABLE = 'screen_screener_list'
 
-type ScreenerSortColumn = 'score' | 'forward_growth_score'
+const LIST_COLUMNS =
+  'symbol, display_name, score, forward_rev_cagr_3y, forward_growth_score, profile_id, sector, industry, any_gate_fail, score_cap, raw_weighted, updated_at, next_earnings_date'
+
+function cycleSort(
+  active: ScreenerSortableColumn | null,
+  ascending: boolean,
+  clicked: ScreenerSortableColumn,
+): { column: ScreenerSortableColumn | null; ascending: boolean } {
+  if (active !== clicked) return { column: clicked, ascending: false }
+  if (!ascending) return { column: clicked, ascending: true }
+  return { column: null, ascending: false }
+}
+
+function dbOrderColumn(column: ScreenerSortableColumn | null): string {
+  if (!column) return 'symbol'
+  if (column === 'forward_growth_score') return 'forward_rev_cagr_3y'
+  return column
+}
 
 function formatProfileId(id: string): string {
   return id
@@ -31,14 +55,14 @@ type FacetRow = Pick<ScreenScoreRow, 'profile_id' | 'sector'>
 
 export default function ScreenerPage() {
   const [facetRows, setFacetRows] = useState<FacetRow[] | null>(null)
-  const [rows, setRows] = useState<ScreenScoreRow[] | null>(null)
+  const [rows, setRows] = useState<ScreenScreenerRow[] | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filterProfile, setFilterProfile] = useState('')
   const [filterSector, setFilterSector] = useState('')
-  const [sortColumn, setSortColumn] = useState<ScreenerSortColumn>('score')
+  const [sortColumn, setSortColumn] = useState<ScreenerSortableColumn | null>(null)
   const [sortAscending, setSortAscending] = useState(false)
 
   const [forwardGrowthRank, setForwardGrowthRank] = useState<Map<string, number> | null>(null)
@@ -197,6 +221,13 @@ export default function ScreenerPage() {
     }
   }, [sortColumn])
 
+  const handleHeaderSort = useCallback((clicked: ScreenerSortableColumn) => {
+    const next = cycleSort(sortColumn, sortAscending, clicked)
+    setSortColumn(next.column)
+    setSortAscending(next.ascending)
+    setPage(1)
+  }, [sortColumn, sortAscending])
+
   useEffect(() => {
     const sb = getSupabaseBrowserClient()
     if (!sb) return
@@ -207,11 +238,13 @@ export default function ScreenerPage() {
       setLoading(true)
       setError(null)
 
-      const effectiveSortColumn = sortColumn === 'forward_growth_score' ? 'forward_rev_cagr_3y' : sortColumn
+      const orderCol = dbOrderColumn(sortColumn)
+      const ascending = sortColumn ? sortAscending : true
+
       let q = sb
-        .from('screen_scores')
+        .from(SCREENER_TABLE)
         .select(LIST_COLUMNS, { count: 'exact' })
-        .order(effectiveSortColumn, { ascending: sortAscending, nullsFirst: false })
+        .order(orderCol, { ascending, nullsFirst: false })
 
       if (sortColumn === 'forward_growth_score') q = q.not('forward_rev_cagr_3y', 'is', null)
       if (filterProfile) q = q.eq('profile_id', filterProfile)
@@ -225,14 +258,18 @@ export default function ScreenerPage() {
         if (cancelled) return
         setLoading(false)
         if (qErr) {
-          setError(qErr.message)
+          const hint =
+            qErr.message.includes('screen_screener_list') || qErr.code === 'PGRST205'
+              ? ' Apply the screener view migration (`npx supabase db push`).'
+              : ''
+          setError(qErr.message + hint)
           setRows(null)
           setTotalCount(0)
           return
         }
         const c = count ?? 0
         setTotalCount(c)
-        setRows((data as ScreenScoreRow[]) ?? [])
+        setRows((data as ScreenScreenerRow[]) ?? [])
         const maxPage = Math.max(1, Math.ceil(c / PAGE_SIZE))
         setPage((p) => (p > maxPage ? maxPage : p))
       })
@@ -302,10 +339,9 @@ export default function ScreenerPage() {
           <h1 className="mt-2 font-display text-3xl md:text-4xl">Nightly screener</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
             Moat and forward growth (1–10, consensus revenue CAGR over the next three estimate years) are written by
-            the nightly batch job. Data can be about a day behind the LIVE market. Use{' '}
-            <span className="font-medium">Chart</span> next to a name for the same precomputed weekly and daily OHLC
-            windows as on the home page (served from Supabase after the nightly chart step). The table loads{' '}
-            <span className="font-mono">{PAGE_SIZE}</span> rows per page.
+            the nightly batch job. Data can be about a day behind the LIVE market. Click a column header to sort
+            (descending, ascending, then reset). Use <span className="font-medium">Chart</span> for precomputed OHLC
+            windows. The table loads <span className="font-mono">{PAGE_SIZE}</span> rows per page.
           </p>
         </div>
       </header>
@@ -452,42 +488,6 @@ export default function ScreenerPage() {
                   ) : null}
                 </select>
               </div>
-              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
-                <label htmlFor="screener-sort" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Sort by
-                </label>
-                <select
-                  id="screener-sort"
-                  value={sortColumn}
-                  onChange={(e) => {
-                    const col = e.target.value as ScreenerSortColumn
-                    setSortColumn(col)
-                    setPage(1)
-                    if (col === 'forward_growth_score') setSortAscending(false)
-                  }}
-                  className={`mt-1 ${selectClass}`}
-                >
-                  <option value="score">Moat score</option>
-                  <option value="forward_growth_score">Forward growth</option>
-                </select>
-              </div>
-              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
-                <label htmlFor="screener-sort-dir" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Order
-                </label>
-                <select
-                  id="screener-sort-dir"
-                  value={sortAscending ? 'asc' : 'desc'}
-                  onChange={(e) => {
-                    setSortAscending(e.target.value === 'asc')
-                    setPage(1)
-                  }}
-                  className={`mt-1 ${selectClass}`}
-                >
-                  <option value="desc">Highest first</option>
-                  <option value="asc">Lowest first</option>
-                </select>
-              </div>
               {(filterProfile || filterSector) && (
                 <button
                   type="button"
@@ -536,77 +536,122 @@ export default function ScreenerPage() {
                 </div>
               ) : null}
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/70 shadow-sm backdrop-blur">
-              <table className="w-full min-w-[720px] text-left text-sm">
+            <div className="screener-table-wrap">
+              <table className="screener-table">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/90 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <th className="px-3 py-3">#</th>
-                    <th className="px-3 py-3">Moat</th>
-                    <th className="px-3 py-3">Fwd growth</th>
-                    <th className="px-3 py-3">Ticker</th>
-                    <th className="px-3 py-3">Name</th>
-                    <th className="px-3 py-3">Chart</th>
-                    <th className="px-3 py-3">Profile</th>
-                    <th className="px-3 py-3">Sector</th>
-                    <th className="px-3 py-3">Gate</th>
-                    <th className="px-3 py-3">Updated</th>
+                  <tr>
+                    <th className="screener-table__th screener-table__th--num">#</th>
+                    <ScreenerSortableHeader
+                      label="Moat"
+                      column="score"
+                      activeColumn={sortColumn}
+                      ascending={sortAscending}
+                      onSort={handleHeaderSort}
+                    />
+                    <ScreenerSortableHeader
+                      label="Fwd growth"
+                      column="forward_growth_score"
+                      activeColumn={sortColumn}
+                      ascending={sortAscending}
+                      onSort={handleHeaderSort}
+                    />
+                    <ScreenerSortableHeader
+                      label="Ticker"
+                      column="symbol"
+                      activeColumn={sortColumn}
+                      ascending={sortAscending}
+                      onSort={handleHeaderSort}
+                    />
+                    <ScreenerSortableHeader
+                      label="Name"
+                      column="display_name"
+                      activeColumn={sortColumn}
+                      ascending={sortAscending}
+                      onSort={handleHeaderSort}
+                    />
+                    <ScreenerSortableHeader
+                      label="Earnings date"
+                      column="next_earnings_date"
+                      activeColumn={sortColumn}
+                      ascending={sortAscending}
+                      onSort={handleHeaderSort}
+                    />
+                    <th className="screener-table__th">Chart</th>
+                    <th className="screener-table__th">Profile</th>
+                    <th className="screener-table__th">Sector</th>
+                    <th className="screener-table__th">Gate</th>
+                    <ScreenerSortableHeader
+                      label="Updated"
+                      column="updated_at"
+                      activeColumn={sortColumn}
+                      ascending={sortAscending}
+                      onSort={handleHeaderSort}
+                    />
                   </tr>
                 </thead>
                 <tbody>
                   {!rows || rows.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-10 text-center text-sm text-slate-500">
+                      <td colSpan={11} className="screener-table__td px-4 py-10 text-center text-sm text-slate-500">
                         No rows on this page.
                       </td>
                     </tr>
                   ) : (
-                    rows.map((r, i) => (
-                      <tr key={r.symbol} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80">
-                        <td className="px-3 py-2.5 text-slate-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
-                        <td className="px-3 py-2.5 font-mono font-semibold text-moat-ink">{r.score.toFixed(2)}</td>
-                        <td className="px-3 py-2.5 font-mono font-semibold text-sky-800">
-                          {sortColumn === 'forward_growth_score'
-                            ? (forwardGrowthRank?.get(r.symbol.trim().toUpperCase()) ?? '—')
-                            : r.forward_growth_score != null
-                              ? r.forward_growth_score
-                              : '—'}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono font-medium">
-                          <Link
-                            to={`/?ticker=${encodeURIComponent(r.symbol)}`}
-                            className="text-moat-accent underline decoration-moat-accent/30 underline-offset-2 transition hover:text-moat-accent-dim hover:decoration-moat-accent-dim"
-                          >
-                            {r.symbol}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800">{r.display_name}</td>
-                        <td className="whitespace-nowrap px-3 py-2.5">
-                          <button
-                            type="button"
-                            onClick={() => void openChart(r.symbol, r.display_name)}
-                            className="text-moat-accent underline decoration-moat-accent/30 underline-offset-2 transition hover:text-moat-accent-dim hover:decoration-moat-accent-dim"
-                          >
-                            Chart
-                          </button>
-                        </td>
-                        <td className="max-w-[200px] truncate px-3 py-2.5 text-slate-600" title={r.profile_id}>
-                          {formatProfileId(r.profile_id)}
-                        </td>
-                        <td className="max-w-[160px] truncate px-3 py-2.5 text-slate-500" title={r.sector ?? ''}>
-                          {r.sector ?? '—'}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {r.any_gate_fail ? (
-                            <span className="rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-800">Fail</span>
-                          ) : (
-                            <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">OK</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
-                          {new Date(r.updated_at).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))
+                    rows.map((r, i) => {
+                      const sym = r.symbol.trim().toUpperCase()
+                      const fwdDisplay =
+                        sortColumn === 'forward_growth_score'
+                          ? (forwardGrowthRank?.get(sym) ?? '—')
+                          : r.forward_growth_score != null
+                            ? r.forward_growth_score
+                            : '—'
+                      const earningsLabel = r.next_earnings_date
+                        ? formatNextEarningsDisplay(r.next_earnings_date)
+                        : '—'
+
+                      return (
+                        <tr key={r.symbol}>
+                          <td className="screener-table__td screener-table__td--num">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                          <td className="screener-table__td screener-table__td--moat">{r.score.toFixed(2)}</td>
+                          <td className="screener-table__td screener-table__td--growth">{fwdDisplay}</td>
+                          <td className="screener-table__td font-mono font-medium">
+                            <Link
+                              to={`/?ticker=${encodeURIComponent(r.symbol)}`}
+                              className="text-moat-accent underline decoration-moat-accent/30 underline-offset-2 transition hover:text-moat-accent-dim hover:decoration-moat-accent-dim"
+                            >
+                              {r.symbol}
+                            </Link>
+                          </td>
+                          <td className="screener-table__td text-slate-800">{r.display_name}</td>
+                          <td className="screener-table__td screener-table__td--earnings">{earningsLabel}</td>
+                          <td className="screener-table__td whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => void openChart(r.symbol, r.display_name)}
+                              className="text-moat-accent underline decoration-moat-accent/30 underline-offset-2 transition hover:text-moat-accent-dim hover:decoration-moat-accent-dim"
+                            >
+                              Chart
+                            </button>
+                          </td>
+                          <td className="screener-table__td max-w-[200px] truncate text-slate-600" title={r.profile_id}>
+                            {formatProfileId(r.profile_id)}
+                          </td>
+                          <td className="screener-table__td max-w-[160px] truncate text-slate-500" title={r.sector ?? ''}>
+                            {r.sector ?? '—'}
+                          </td>
+                          <td className="screener-table__td">
+                            {r.any_gate_fail ? (
+                              <span className="rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-800">Fail</span>
+                            ) : (
+                              <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">OK</span>
+                            )}
+                          </td>
+                          <td className="screener-table__td screener-table__td--updated">
+                            {new Date(r.updated_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
