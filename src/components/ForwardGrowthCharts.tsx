@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { barHeightPercents, barHeightRem } from '../lib/chartBarScale'
 import { extractForwardRevenueEstimateWindow } from '../lib/fmp/forwardRevenueGrowthScore'
 import type { ForwardGrowthChartPoint, ForwardGrowthCharts } from '../lib/fmp/parseForwardEstimates'
 import './forwardGrowthCharts.css'
@@ -11,22 +12,6 @@ function formatUsd(n: number): string {
   if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`
   if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1)}K`
   return `${sign}$${abs.toFixed(0)}`
-}
-
-const MIN_BAR_PERCENT = 14
-
-function barPercents(values: Array<number | undefined>): number[] {
-  const nums = values.filter((v): v is number => v !== undefined && Number.isFinite(v))
-  if (nums.length === 0) return values.map(() => 0)
-  const lo = Math.min(0, ...nums)
-  const hi = Math.max(0, ...nums)
-  const span = hi - lo || 1
-  return values.map((v) => {
-    if (v === undefined || !Number.isFinite(v)) return 0
-    const pct = ((v - lo) / span) * 100
-    if (v > 0) return Math.max(pct, MIN_BAR_PERCENT)
-    return pct
-  })
 }
 
 function yoyPct(cur?: number, prev?: number): string | undefined {
@@ -68,7 +53,7 @@ function ForwardBarGroup({
   estimateMetricClass: string
   analystLabel?: (p: ForwardGrowthChartPoint) => string | undefined
 }) {
-  const heights = useMemo(() => barPercents(values), [values])
+  const heights = useMemo(() => barHeightPercents(values), [values])
 
   return (
     <div className="forward-growth-chart__card">
@@ -78,7 +63,7 @@ function ForwardBarGroup({
           const v = values[i]
           const h = heights[i] ?? 0
           const has = v !== undefined && Number.isFinite(v)
-          const barRem = has ? Math.max(0.25, (h / 100) * 7.5) : 0.2
+          const barRem = barHeightRem(h, has)
           const prev = i > 0 ? values[i - 1] : undefined
           const yoy = yoyPct(v, prev)
           const analysts = analystLabel?.(p)

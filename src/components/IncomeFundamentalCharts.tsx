@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { barHeightPercents, barHeightRem } from '../lib/chartBarScale'
 import type { IncomeChartPoint, IncomeFundamentalsCharts } from '../lib/moatFundamentalsSnapshot'
 
 type PeriodMode = 'yearly' | 'quarterly'
@@ -11,18 +12,6 @@ function formatUsd(n: number): string {
   if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`
   if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1)}K`
   return `${sign}$${abs.toFixed(0)}`
-}
-
-function barPercents(values: Array<number | undefined>): number[] {
-  const nums = values.filter((v): v is number => v !== undefined && Number.isFinite(v))
-  if (nums.length === 0) return values.map(() => 0)
-  const lo = Math.min(0, ...nums)
-  const hi = Math.max(0, ...nums)
-  const span = hi - lo || 1
-  return values.map((v) => {
-    if (v === undefined || !Number.isFinite(v)) return 0
-    return ((v - lo) / span) * 100
-  })
 }
 
 function pickValue(p: IncomeChartPoint, kind: 'eps' | 'revenue' | 'netIncome'): number | undefined {
@@ -43,7 +32,7 @@ function BarGroup({
   kind: 'eps' | 'revenue' | 'netIncome'
 }) {
   const values = useMemo(() => points.map((p) => pickValue(p, kind)), [points, kind])
-  const heights = useMemo(() => barPercents(values), [values])
+  const heights = useMemo(() => barHeightPercents(values), [values])
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 shadow-inner backdrop-blur">
@@ -53,7 +42,7 @@ function BarGroup({
           const v = values[i]
           const h = heights[i] ?? 0
           const has = v !== undefined && Number.isFinite(v)
-          const barRem = has ? Math.max(0.25, (h / 100) * 9) : 0.2
+          const barRem = barHeightRem(h, has, 9)
           return (
             <div key={`${p.date}-${p.label}-${i}`} className="flex h-36 min-w-0 flex-1 flex-col items-center justify-end gap-1">
               <div
