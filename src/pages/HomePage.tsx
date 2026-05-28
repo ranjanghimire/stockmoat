@@ -14,24 +14,22 @@ import { DELAYED_PRICE_SNAPSHOT_TTL_MS } from '../lib/delayedPricePolicy'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource'
 import { buildCompanyFacts, listingCurrencyFromPack } from '../lib/fmp/buildCompanyFacts'
 import type { CompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
-import {
-  fetchAnalystEstimatesAnnual,
-  fetchAnalystEstimatesQuarterly,
-  fetchCompanyRawPack,
-} from '../lib/fmp/fetchCompanyRawPack'
+import { fetchCompanyRawPack } from '../lib/fmp/fetchCompanyRawPack'
 import {
   fetchHomeFmpBundleViaEdge,
   forwardGrowthNeedsBackgroundRefresh,
   quoteSnapshotMsFromEdgeMeta,
-  refreshForwardGrowthChartsViaEdge,
+  refreshHomeFmpTickerViaEdge,
   shouldUseHomeFmpEdgeCache,
   type HomeFmpEdgeMeta,
+  type HomeFmpRefreshResult,
 } from '../lib/fmp/fetchHomeFmpViaEdge'
 import {
-  buildForwardGrowthChartsFromPack,
-  forwardGrowthChartsUsable,
-  type ForwardGrowthCharts as ForwardGrowthChartsData,
-} from '../lib/fmp/parseForwardEstimates'
+  clearForwardGrowthCagrUniverseCache,
+  fetchForwardGrowthCagrUniverse,
+  forwardGrowthScoreFromCharts,
+} from '../lib/fmp/forwardRevenueGrowthScore'
+import { forwardGrowthChartsUsable, type ForwardGrowthCharts as ForwardGrowthChartsData } from '../lib/fmp/parseForwardEstimates'
 import { EMPTY_PEER_MEDIANS, fetchPeerMedians } from '../lib/fmp/peerMedians'
 import { getFmpApiKey } from '../lib/fmp/http'
 import {
@@ -59,6 +57,7 @@ import { PillarDetailPanel } from '../components/PillarDetailPanel'
 import { ScoreHero } from '../components/ScoreHero'
 import { PriceChartsPanel } from '../components/PriceChartsPanel'
 import { getSupabaseBrowserClient } from '../lib/supabaseClient'
+import type { PeerMedians } from '../lib/fmp/peerMedians'
 
 function formatProfileId(id: string): string {
   return id
@@ -79,6 +78,85 @@ type NextEarningsHomeState =
   | { status: 'ready'; dateLabel: string; fromLiveApi: boolean }
   | { status: 'empty' }
   | { status: 'error'; message: string }
+
+async function resolveForwardGrowthScoreClient(
+  symbol: string,
+  charts: ForwardGrowthChartsData | undefined,
+): Promise<number | null> {
+  const sb = getSupabaseBrowserClient()
+  if (!sb || !forwardGrowthChartsUsable(charts)) return null
+  try {
+    const universe = await fetchForwardGrowthCagrUniverse(sb)
+    return forwardGrowthScoreFromCharts(symbol, charts, universe)
+  } catch {
+    return null
+  }
+}
+
+function buildMoatFromPack(
+  sym: string,
+  pack: CompanyRawPack,
+  peerMedians: PeerMedians,
+  edgeForwardGrowth: ForwardGrowthChartsData | undefined,
+  edgeQuoteMeta: HomeFmpEdgeMeta | null,
+  useYahoo: boolean,
+  profileMode: 'auto' | 'manual',
+  manualProfile: string,
+): MoatAnalysis {
+  const facts = buildCompanyFacts(sym, pack)
+  const routing =
+    profileMode === 'auto'
+      ? mapFmpSectorToProfile(facts.sector, facts.industry)
+      : { profileId: manualProfile, subIndustryHint: facts.industry }
+
+  const root = loadSectorProfiles()
+  const profile = root.profiles[routing.profileId]
+  if (!profile) {
+    throw new Error(`Unknown profile id: ${routing.profileId}`)
+  }
+
+  const resolved = resolveProfileMetrics(routing.profileId, profile, {
+    itVariant: profileMode === 'manual' ? DEMO_TICKERS[sym]?.itVariant : undefined,
+    subIndustryHint: routing.subIndustryHint,
+  })
+
+  const peerSnapshot = peerMedians.n > 0 ? peerMedians : null
+  const evaluate = createLiveMetricEvaluator(sym, facts, peerSnapshot)
+  const savedAt = Date.now()
+  const priceSnapshotMs = quoteSnapshotMsFromEdgeMeta(edgeQuoteMeta) ?? savedAt
+  const listingCurrency = listingCurrencyFromPack(pack)
+
+  const result = computeMoatAnalysis(
+    sym,
+    facts.companyName,
+    routing.profileId,
+    resolved.metrics,
+    resolved.itVariant,
+    evaluate,
+    {
+      sector: facts.sector,
+      industry: facts.industry,
+      dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
+      fundamentals: buildMoatFundamentalsSnapshot(
+        facts,
+        pack,
+        peerSnapshot,
+        facts.sector,
+        edgeForwardGrowth,
+      ),
+      facts,
+      peers: peerSnapshot,
+    },
+  )
+
+  return {
+    ...result,
+    delayedPrice:
+      facts.price !== undefined && facts.price > 0
+        ? { value: facts.price, currency: listingCurrency, fetchedAt: priceSnapshotMs }
+        : undefined,
+  }
+}
 
 function NextEarningsStrip({ symbol, state }: { symbol: string; state: NextEarningsHomeState }) {
   return (
@@ -122,6 +200,7 @@ export default function HomePage() {
   const [chartLoadGeneration, setChartLoadGeneration] = useState(0)
   const [nextEarningsState, setNextEarningsState] = useState<NextEarningsHomeState | null>(null)
   const [forwardGrowthScore, setForwardGrowthScore] = useState<number | null>(null)
+  const [homeDataRefreshing, setHomeDataRefreshing] = useState(false)
 
   const tickerFromParams = searchParams.get('ticker')?.trim().toUpperCase() ?? ''
   useEffect(() => {
@@ -137,37 +216,6 @@ export default function HomePage() {
     const id = window.setTimeout(() => setSelectedPillar(null), 0)
     return () => window.clearTimeout(id)
   }, [submitted])
-
-  useEffect(() => {
-    const sym = analysis?.ticker?.trim().toUpperCase()
-    const sb = getSupabaseBrowserClient()
-    if (!sym || !sb) {
-      const id = window.setTimeout(() => setForwardGrowthScore(null), 0)
-      return () => window.clearTimeout(id)
-    }
-
-    let cancelled = false
-    void sb
-      .from('screen_scores')
-      .select('forward_growth_score')
-      .eq('symbol', sym)
-      .maybeSingle()
-      .then(({ data, error: qErr }) => {
-        if (cancelled) return
-        if (qErr) {
-          setForwardGrowthScore(null)
-          return
-        }
-        const raw = data?.forward_growth_score
-        setForwardGrowthScore(
-          typeof raw === 'number' && Number.isFinite(raw) && raw >= 1 && raw <= 10 ? Math.round(raw) : null,
-        )
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [analysis?.ticker])
 
   useEffect(() => {
     if (!selectedPillar) return
@@ -221,27 +269,93 @@ export default function HomePage() {
     setFromCache(false)
     setLoading(true)
     setError(null)
+    setHomeDataRefreshing(false)
+
+    const applyRefresh = (refresh: HomeFmpRefreshResult) => {
+      clearForwardGrowthCagrUniverseCache()
+      const analysisWithPrice = buildMoatFromPack(
+        sym,
+        refresh.pack,
+        refresh.peer_medians,
+        refresh.forward_growth,
+        refresh.meta,
+        useYahoo,
+        profileMode,
+        manualProfile,
+      )
+      const score =
+        refresh.forward_growth_score ??
+        null
+      setForwardGrowthScore(score)
+      writeAnalysisCache(
+        analysisCacheRef.current,
+        cacheKey,
+        { savedAt: Date.now(), analysis: analysisWithPrice },
+        ANALYSIS_CACHE_MAX_ENTRIES,
+      )
+      setAnalysis(analysisWithPrice)
+    }
+
+    const queueStaleRefresh = (
+      edgeQuoteMeta: HomeFmpEdgeMeta | null,
+      edgeForwardGrowth: ForwardGrowthChartsData | undefined,
+    ) => {
+      if (!edgeHomeCache || !supabaseClient) return
+      if (!forwardGrowthNeedsBackgroundRefresh(edgeQuoteMeta, edgeForwardGrowth)) return
+
+      setHomeDataRefreshing(true)
+      void refreshHomeFmpTickerViaEdge({
+        supabase: supabaseClient,
+        profileCacheKey: cacheKey,
+        symbol: sym,
+        fetchPeers: shouldFetchFmpPeerMedians(),
+        forceRefresh: false,
+      })
+        .then((refresh) => {
+          if (!refresh) return
+          applyRefresh(refresh)
+        })
+        .finally(() => setHomeDataRefreshing(false))
+    }
+
     try {
       let pack: CompanyRawPack
       let peerMedians = EMPTY_PEER_MEDIANS
       let edgeQuoteMeta: HomeFmpEdgeMeta | null = null
       let edgeForwardGrowth: ForwardGrowthChartsData | undefined
+      let growthScore: number | null = null
 
       if (useYahoo) {
         pack = await fetchYahooCompanyPackDev(sym, { refresh: opts?.forceRefresh === true })
+      } else if (edgeHomeCache && supabaseClient && opts?.forceRefresh) {
+        const refresh = await refreshHomeFmpTickerViaEdge({
+          supabase: supabaseClient,
+          profileCacheKey: cacheKey,
+          symbol: sym,
+          fetchPeers: shouldFetchFmpPeerMedians(),
+          forceRefresh: true,
+        })
+        if (!refresh) {
+          throw new Error(
+            'home-fmp-cache refresh failed. Deploy the edge function and apply DB migrations.',
+          )
+        }
+        applyRefresh(refresh)
+        setLoading(false)
+        return
       } else if (edgeHomeCache && supabaseClient) {
         const bundle = await fetchHomeFmpBundleViaEdge({
           supabase: supabaseClient,
           profileCacheKey: cacheKey,
           symbol: sym,
           fetchPeers: shouldFetchFmpPeerMedians(),
-          forceRefresh: opts?.forceRefresh === true,
         })
         if (bundle) {
           pack = bundle.pack
           peerMedians = bundle.peer_medians
           edgeQuoteMeta = bundle.meta
           edgeForwardGrowth = bundle.forward_growth
+          growthScore = bundle.forward_growth_score ?? null
         } else if (fmpKey) {
           pack = await fetchCompanyRawPack(sym, fmpKey)
           peerMedians = shouldFetchFmpPeerMedians()
@@ -259,121 +373,32 @@ export default function HomePage() {
           : EMPTY_PEER_MEDIANS
       }
 
-      const facts = buildCompanyFacts(sym, pack)
-
-      const routing =
-        profileMode === 'auto'
-          ? mapFmpSectorToProfile(facts.sector, facts.industry)
-          : { profileId: manualProfile, subIndustryHint: facts.industry }
-
-      const root = loadSectorProfiles()
-      const profile = root.profiles[routing.profileId]
-      if (!profile) {
-        throw new Error(`Unknown profile id: ${routing.profileId}`)
-      }
-
-      const resolved = resolveProfileMetrics(routing.profileId, profile, {
-        itVariant: profileMode === 'manual' ? DEMO_TICKERS[sym]?.itVariant : undefined,
-        subIndustryHint: routing.subIndustryHint,
-      })
-
-      const peerSnapshot = peerMedians.n > 0 ? peerMedians : null
-      const evaluate = createLiveMetricEvaluator(sym, facts, peerSnapshot)
-
-      const result = computeMoatAnalysis(
+      const analysisWithPrice = buildMoatFromPack(
         sym,
-        facts.companyName,
-        routing.profileId,
-        resolved.metrics,
-        resolved.itVariant,
-        evaluate,
-        {
-          sector: facts.sector,
-          industry: facts.industry,
-          dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
-          fundamentals: buildMoatFundamentalsSnapshot(
-            facts,
-            pack,
-            peerSnapshot,
-            facts.sector,
-            edgeForwardGrowth,
-          ),
-          facts,
-          peers: peerSnapshot,
-        },
+        pack,
+        peerMedians,
+        edgeForwardGrowth,
+        edgeQuoteMeta,
+        useYahoo,
+        profileMode,
+        manualProfile,
       )
 
-      const savedAt = Date.now()
-      const priceSnapshotMs = quoteSnapshotMsFromEdgeMeta(edgeQuoteMeta) ?? savedAt
-      const listingCurrency = listingCurrencyFromPack(pack)
-      const analysisWithPrice: MoatAnalysis = {
-        ...result,
-        delayedPrice:
-          facts.price !== undefined && facts.price > 0
-            ? { value: facts.price, currency: listingCurrency, fetchedAt: priceSnapshotMs }
-            : undefined,
+      if (growthScore == null && analysisWithPrice.fundamentals?.forwardGrowth) {
+        growthScore = await resolveForwardGrowthScoreClient(sym, analysisWithPrice.fundamentals.forwardGrowth)
       }
+      setForwardGrowthScore(growthScore)
 
       writeAnalysisCache(
         analysisCacheRef.current,
         cacheKey,
-        { savedAt, analysis: analysisWithPrice },
+        { savedAt: Date.now(), analysis: analysisWithPrice },
         ANALYSIS_CACHE_MAX_ENTRIES,
       )
       setAnalysis(analysisWithPrice)
+      setLoading(false)
 
-      const forwardCharts = analysisWithPrice.fundamentals?.forwardGrowth
-      const persistForwardToDb = edgeHomeCache && supabaseClient && forwardGrowthChartsUsable(forwardCharts)
-
-      if (persistForwardToDb && forwardGrowthNeedsBackgroundRefresh(edgeQuoteMeta, forwardCharts)) {
-        void refreshForwardGrowthChartsViaEdge({
-          supabase: supabaseClient!,
-          profileCacheKey: cacheKey,
-          symbol: sym,
-        }).then((charts) => {
-          if (!charts || !forwardGrowthChartsUsable(charts)) return
-          setAnalysis((prev) => {
-            if (!prev || prev.ticker.toUpperCase() !== sym || !prev.fundamentals) return prev
-            return {
-              ...prev,
-              fundamentals: { ...prev.fundamentals, forwardGrowth: charts },
-            }
-          })
-        })
-      } else if (
-        !forwardGrowthChartsUsable(forwardCharts) &&
-        !useYahoo &&
-        fmpKey &&
-        pack.incomeAnnual.length > 0
-      ) {
-        void Promise.all([
-          fetchAnalystEstimatesAnnual(sym, fmpKey),
-          fetchAnalystEstimatesQuarterly(sym, fmpKey),
-        ]).then(([rows, quarterlyRows]) => {
-          const charts = buildForwardGrowthChartsFromPack(
-            sym,
-            rows,
-            pack.incomeAnnual,
-            pack.incomeQuarterly,
-            quarterlyRows,
-          )
-          if (!charts || !forwardGrowthChartsUsable(charts)) return
-          setAnalysis((prev) => {
-            if (!prev || prev.ticker.toUpperCase() !== sym || !prev.fundamentals) return prev
-            return {
-              ...prev,
-              fundamentals: { ...prev.fundamentals, forwardGrowth: charts },
-            }
-          })
-          if (edgeHomeCache && supabaseClient) {
-            void refreshForwardGrowthChartsViaEdge({
-              supabase: supabaseClient,
-              profileCacheKey: cacheKey,
-              symbol: sym,
-            })
-          }
-        })
-      }
+      queueStaleRefresh(edgeQuoteMeta, edgeForwardGrowth)
     } catch (e) {
       setAnalysis(null)
       setError(e instanceof Error ? e.message : 'Something went wrong while loading market data.')
@@ -623,6 +648,7 @@ export default function HomePage() {
               <ForwardGrowthChartsCard
                 charts={analysis.fundamentals.forwardGrowth}
                 growthScore={forwardGrowthScore}
+                refreshing={homeDataRefreshing}
               />
             ) : null}
             <KeyTakeawaySection loading={loading} analysis={analysis} />

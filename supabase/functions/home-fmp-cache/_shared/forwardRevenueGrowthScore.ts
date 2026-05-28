@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { ForwardGrowthCharts, ForwardGrowthChartPoint } from './parseForwardEstimates'
+import type { ForwardGrowthCharts, ForwardGrowthChartPoint } from './parseForwardEstimates.ts'
 
 /** Three consecutive forward consensus revenue years from the growth chart (e.g. 2027–2029). */
 export interface ForwardRevenueEstimateWindow {

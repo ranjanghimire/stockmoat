@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { percentileForwardGrowthScores } from '../fmp/forwardRevenueGrowthScore'
+import { percentileForwardGrowthScores } from './forwardRevenueGrowthScore.ts'
 
 const PAGE_SIZE = 1000
 

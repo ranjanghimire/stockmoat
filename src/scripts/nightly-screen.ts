@@ -26,7 +26,7 @@ import { fetchNightlyDbContext } from '../lib/nightly/fetchNightlyDbContext'
 import { fetchFmpTrendingSymbols } from '../lib/fmp/fetchFmpTrendingMovers'
 import { fetchScreenUniverse } from '../lib/fmp/fetchScreenUniverse'
 import { forwardRevenueCagrFromCharts } from '../lib/fmp/forwardRevenueGrowthScore'
-import { recomputeForwardGrowthPercentiles } from '../lib/nightly/recomputeForwardGrowthPercentiles'
+import { recomputeForwardGrowthPercentiles } from '../lib/fmp/recomputeForwardGrowthPercentiles'
 import { runFmpMoatAnalysis } from '../lib/runFmpMoatAnalysis'
 
 loadDotenv({ path: '.env.local' })

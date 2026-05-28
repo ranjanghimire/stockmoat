@@ -122,9 +122,10 @@ interface ForwardGrowthChartsProps {
   charts: ForwardGrowthCharts
   /** 1–10 rank vs nightly screener universe (from `screen_scores.forward_growth_score`). */
   growthScore?: number | null
+  refreshing?: boolean
 }
 
-export function ForwardGrowthCharts({ charts, growthScore }: ForwardGrowthChartsProps) {
+export function ForwardGrowthCharts({ charts, growthScore, refreshing }: ForwardGrowthChartsProps) {
   const points = charts.points
   const hasRevenue = points.some((p) => p.revenueUsd !== undefined)
   const hasEps = points.some((p) => p.eps !== undefined)
@@ -187,6 +188,8 @@ export function ForwardGrowthCharts({ charts, growthScore }: ForwardGrowthCharts
                 <span className="forward-growth-chart__score-denom">/10</span>
               </p>
             </div>
+          ) : refreshing ? (
+            <p className="text-[10px] font-medium text-sky-700">Updating growth score…</p>
           ) : null}
           {charts.asOf ? (
             <p className="text-[10px] text-slate-500">Estimate rows through {charts.asOf}</p>
