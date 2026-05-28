@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PriceChartsPanel } from '../components/PriceChartsPanel'
 import { getSupabaseBrowserClient, type ScreenChartRow, type ScreenScoreRow } from '../lib/supabaseClient'
+import { fetchForwardGrowthCagrUniverse, percentileForwardGrowthScores } from '../lib/fmp/forwardRevenueGrowthScore'
 import type { PriceChartsPayload } from '../lib/yahoo/weeklyChartTypes'
 
 const PAGE_SIZE = 25
 
 const LIST_COLUMNS =
-  'symbol, display_name, score, forward_growth_score, profile_id, sector, industry, any_gate_fail, score_cap, raw_weighted, updated_at'
+  'symbol, display_name, score, forward_rev_cagr_3y, forward_growth_score, profile_id, sector, industry, any_gate_fail, score_cap, raw_weighted, updated_at'
 
 type ScreenerSortColumn = 'score' | 'forward_growth_score'
 
@@ -39,6 +40,8 @@ export default function ScreenerPage() {
   const [filterSector, setFilterSector] = useState('')
   const [sortColumn, setSortColumn] = useState<ScreenerSortColumn>('score')
   const [sortAscending, setSortAscending] = useState(false)
+
+  const [forwardGrowthRank, setForwardGrowthRank] = useState<Map<string, number> | null>(null)
 
   const [chartModal, setChartModal] = useState<ChartModalState | null>(null)
   const [chartData, setChartData] = useState<PriceChartsPayload | null>(null)
@@ -173,6 +176,30 @@ export default function ScreenerPage() {
   useEffect(() => {
     const sb = getSupabaseBrowserClient()
     if (!sb) return
+    if (sortColumn !== 'forward_growth_score') {
+      queueMicrotask(() => setForwardGrowthRank(null))
+      return
+    }
+
+    let cancelled = false
+    void fetchForwardGrowthCagrUniverse(sb)
+      .then((universe) => {
+        if (cancelled) return
+        setForwardGrowthRank(percentileForwardGrowthScores(universe))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setForwardGrowthRank(new Map())
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [sortColumn])
+
+  useEffect(() => {
+    const sb = getSupabaseBrowserClient()
+    if (!sb) return
 
     let cancelled = false
     queueMicrotask(() => {
@@ -180,11 +207,13 @@ export default function ScreenerPage() {
       setLoading(true)
       setError(null)
 
+      const effectiveSortColumn = sortColumn === 'forward_growth_score' ? 'forward_rev_cagr_3y' : sortColumn
       let q = sb
         .from('screen_scores')
         .select(LIST_COLUMNS, { count: 'exact' })
-        .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
-      if (sortColumn === 'forward_growth_score') q = q.not('forward_growth_score', 'is', null)
+        .order(effectiveSortColumn, { ascending: sortAscending, nullsFirst: false })
+
+      if (sortColumn === 'forward_growth_score') q = q.not('forward_rev_cagr_3y', 'is', null)
       if (filterProfile) q = q.eq('profile_id', filterProfile)
       if (filterSector === '__none__') q = q.or('sector.is.null,sector.eq.')
       else if (filterSector) q = q.eq('sector', filterSector)
@@ -307,8 +336,7 @@ export default function ScreenerPage() {
         !filterSector &&
         sortColumn === 'forward_growth_score' ? (
           <p className="text-sm text-slate-600">
-            No forward growth ranks yet. Apply the forward growth migration (<span className="font-mono">npx supabase db push</span>)
-            and rerun the nightly workflow so <span className="font-mono">forward_growth_score</span> is populated.
+            No forward growth data yet. Rerun the nightly workflow so <span className="font-mono">forward_rev_cagr_3y</span> is populated.
           </p>
         ) : null}
 
@@ -432,8 +460,10 @@ export default function ScreenerPage() {
                   id="screener-sort"
                   value={sortColumn}
                   onChange={(e) => {
-                    setSortColumn(e.target.value as ScreenerSortColumn)
+                    const col = e.target.value as ScreenerSortColumn
+                    setSortColumn(col)
                     setPage(1)
+                    if (col === 'forward_growth_score') setSortAscending(false)
                   }}
                   className={`mt-1 ${selectClass}`}
                 >
@@ -535,7 +565,11 @@ export default function ScreenerPage() {
                         <td className="px-3 py-2.5 text-slate-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
                         <td className="px-3 py-2.5 font-mono font-semibold text-moat-ink">{r.score.toFixed(2)}</td>
                         <td className="px-3 py-2.5 font-mono font-semibold text-sky-800">
-                          {r.forward_growth_score != null ? r.forward_growth_score : '—'}
+                          {sortColumn === 'forward_growth_score'
+                            ? (forwardGrowthRank?.get(r.symbol.trim().toUpperCase()) ?? '—')
+                            : r.forward_growth_score != null
+                              ? r.forward_growth_score
+                              : '—'}
                         </td>
                         <td className="px-3 py-2.5 font-mono font-medium">
                           <Link
