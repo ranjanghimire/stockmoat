@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { extractForwardRevenueEstimateWindow } from '../lib/fmp/forwardRevenueGrowthScore'
 import type { ForwardGrowthChartPoint, ForwardGrowthCharts } from '../lib/fmp/parseForwardEstimates'
 import './forwardGrowthCharts.css'
 
@@ -119,9 +120,11 @@ function ForwardBarGroup({
 
 interface ForwardGrowthChartsProps {
   charts: ForwardGrowthCharts
+  /** 1–10 rank vs nightly screener universe (from `screen_scores.forward_growth_score`). */
+  growthScore?: number | null
 }
 
-export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
+export function ForwardGrowthCharts({ charts, growthScore }: ForwardGrowthChartsProps) {
   const points = charts.points
   const hasRevenue = points.some((p) => p.revenueUsd !== undefined)
   const hasEps = points.some((p) => p.eps !== undefined)
@@ -137,6 +140,12 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
 
   const revenueValues = points.map((p) => p.revenueUsd)
   const epsValues = points.map((p) => p.eps)
+
+  const revenueWindow = useMemo(() => extractForwardRevenueEstimateWindow(charts), [charts])
+  const scoreTitle =
+    revenueWindow !== undefined
+      ? `Consensus revenue CAGR across FY${revenueWindow.years[0]}–FY${revenueWindow.years[2]}, ranked vs all names in the nightly screener (1 = lowest, 10 = highest).`
+      : 'Ranked vs all names in the nightly screener (1 = lowest, 10 = highest).'
 
   return (
     <section className="rounded-2xl border border-sky-200/60 bg-gradient-to-b from-sky-50/50 to-white/90 shadow-lg shadow-slate-900/5 backdrop-blur">
@@ -169,9 +178,20 @@ export function ForwardGrowthCharts({ charts }: ForwardGrowthChartsProps) {
             </span>
           </div>
         </div>
-        {charts.asOf ? (
-          <p className="shrink-0 text-[10px] text-slate-500">Estimate rows through {charts.asOf}</p>
-        ) : null}
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {growthScore != null && growthScore >= 1 && growthScore <= 10 ? (
+            <div className="forward-growth-chart__score" title={scoreTitle}>
+              <span className="forward-growth-chart__score-label">Growth score</span>
+              <p className="forward-growth-chart__score-value" aria-label={`Growth score ${growthScore} out of 10`}>
+                {growthScore}
+                <span className="forward-growth-chart__score-denom">/10</span>
+              </p>
+            </div>
+          ) : null}
+          {charts.asOf ? (
+            <p className="text-[10px] text-slate-500">Estimate rows through {charts.asOf}</p>
+          ) : null}
+        </div>
       </div>
 
       <div className={`grid gap-4 p-4 ${hasRevenue && hasEps ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>

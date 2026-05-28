@@ -121,6 +121,7 @@ export default function HomePage() {
   const [priceChartsError, setPriceChartsError] = useState<string | null>(null)
   const [chartLoadGeneration, setChartLoadGeneration] = useState(0)
   const [nextEarningsState, setNextEarningsState] = useState<NextEarningsHomeState | null>(null)
+  const [forwardGrowthScore, setForwardGrowthScore] = useState<number | null>(null)
 
   const tickerFromParams = searchParams.get('ticker')?.trim().toUpperCase() ?? ''
   useEffect(() => {
@@ -136,6 +137,37 @@ export default function HomePage() {
     const id = window.setTimeout(() => setSelectedPillar(null), 0)
     return () => window.clearTimeout(id)
   }, [submitted])
+
+  useEffect(() => {
+    const sym = analysis?.ticker?.trim().toUpperCase()
+    const sb = getSupabaseBrowserClient()
+    if (!sym || !sb) {
+      const id = window.setTimeout(() => setForwardGrowthScore(null), 0)
+      return () => window.clearTimeout(id)
+    }
+
+    let cancelled = false
+    void sb
+      .from('screen_scores')
+      .select('forward_growth_score')
+      .eq('symbol', sym)
+      .maybeSingle()
+      .then(({ data, error: qErr }) => {
+        if (cancelled) return
+        if (qErr) {
+          setForwardGrowthScore(null)
+          return
+        }
+        const raw = data?.forward_growth_score
+        setForwardGrowthScore(
+          typeof raw === 'number' && Number.isFinite(raw) && raw >= 1 && raw <= 10 ? Math.round(raw) : null,
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [analysis?.ticker])
 
   useEffect(() => {
     if (!selectedPillar) return
@@ -588,7 +620,10 @@ export default function HomePage() {
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />
             ) : null}
             {analysis.fundamentals?.forwardGrowth ? (
-              <ForwardGrowthChartsCard charts={analysis.fundamentals.forwardGrowth} />
+              <ForwardGrowthChartsCard
+                charts={analysis.fundamentals.forwardGrowth}
+                growthScore={forwardGrowthScore}
+              />
             ) : null}
             <KeyTakeawaySection loading={loading} analysis={analysis} />
             {analysis.fundamentals?.valuation ? (

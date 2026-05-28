@@ -172,3 +172,38 @@
   text-transform: uppercase;
   color: #0369a1;
 }
+
+.forward-growth-chart__score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 0.75rem;
+  border: 1px solid #7dd3fc;
+  background: linear-gradient(180deg, #fff 0%, #e0f2fe 100%);
+  padding: 0.35rem 0.75rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 6%);
+}
+
+.forward-growth-chart__score-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0369a1;
+}
+
+.forward-growth-chart__score-value {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #0c4a6e;
+}
+
+.forward-growth-chart__score-denom {
+  margin-left: 0.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+}
