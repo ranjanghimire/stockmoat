@@ -587,13 +587,13 @@ export default function HomePage() {
             {analysis.fundamentals ? (
               <FundamentalsSummaryCard fundamentals={analysis.fundamentals} dataSource={analysis.dataSource} />
             ) : null}
-            {analysis.fundamentals?.valuation ? (
-              <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
-            ) : null}
             {analysis.fundamentals?.forwardGrowth ? (
               <ForwardGrowthChartsCard charts={analysis.fundamentals.forwardGrowth} />
             ) : null}
             <KeyTakeawaySection loading={loading} analysis={analysis} />
+            {analysis.fundamentals?.valuation ? (
+              <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
+            ) : null}
             <PillarBars
               analysis={analysis}
               selectedPillar={selectedPillar}

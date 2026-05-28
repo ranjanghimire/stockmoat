@@ -123,7 +123,10 @@ function MoatEditorialSubsections({ displayName, ticker }: { displayName: string
   return (
     <div className="space-y-0">
       {moatBody ? (
-        <CollapsibleSubsection defaultOpen={false} title={<SubsectionLabel>What&apos;s the moat?</SubsectionLabel>}>
+        <CollapsibleSubsection
+          defaultOpen={false}
+          title={<SubsectionLabel sentenceCase>What&apos;s the moat?</SubsectionLabel>}
+        >
           <p className="text-sm font-medium leading-relaxed text-slate-800 md:text-base">{moatBody}</p>
         </CollapsibleSubsection>
       ) : null}
