@@ -25,6 +25,8 @@ import { buildNightlySymbolPlan } from '../lib/nightly/buildNightlySymbolPlan'
 import { fetchNightlyDbContext } from '../lib/nightly/fetchNightlyDbContext'
 import { fetchFmpTrendingSymbols } from '../lib/fmp/fetchFmpTrendingMovers'
 import { fetchScreenUniverse } from '../lib/fmp/fetchScreenUniverse'
+import { forwardRevenueCagrFromCharts } from '../lib/fmp/forwardRevenueGrowthScore'
+import { recomputeForwardGrowthPercentiles } from '../lib/nightly/recomputeForwardGrowthPercentiles'
 import { runFmpMoatAnalysis } from '../lib/runFmpMoatAnalysis'
 
 loadDotenv({ path: '.env.local' })
@@ -117,6 +119,7 @@ async function main(): Promise<void> {
     process.stdout.write(`[${i + 1}/${symbols.length}] ${sym} … `)
     try {
       const analysis = await runFmpMoatAnalysis(sym, fmpKey)
+      const forwardRevCagr = forwardRevenueCagrFromCharts(analysis.fundamentals?.forwardGrowth)
       const { error } = await sb.from('screen_scores').upsert(
         {
           symbol: analysis.ticker,
@@ -128,6 +131,8 @@ async function main(): Promise<void> {
           any_gate_fail: analysis.anyGateFail,
           score_cap: analysis.scoreCap,
           raw_weighted: analysis.rawWeighted,
+          forward_rev_cagr_3y: forwardRevCagr ?? null,
+          forward_growth_score: null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'symbol' },
@@ -143,6 +148,14 @@ async function main(): Promise<void> {
   }
 
   console.log(`Done. OK ${ok}, failed ${fail}.`)
+
+  try {
+    console.log('Recomputing forward growth scores (1–10) across all screen_scores…')
+    const { ranked, cleared } = await recomputeForwardGrowthPercentiles(sb)
+    console.log(`Forward growth ranks: ${ranked} with consensus CAGR, ${cleared} without (score cleared).`)
+  } catch (e) {
+    console.error('Forward growth percentile update failed:', e instanceof Error ? e.message : e)
+  }
   if (!legacy && symbols.length > 0 && symbols.length === budget) {
     console.log(`Hit NIGHTLY_BUDGET=${budget} cap — raise budget or rely on next run for remaining candidates.`)
   }

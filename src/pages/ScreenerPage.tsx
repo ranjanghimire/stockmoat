@@ -7,7 +7,9 @@ import type { PriceChartsPayload } from '../lib/yahoo/weeklyChartTypes'
 const PAGE_SIZE = 25
 
 const LIST_COLUMNS =
-  'symbol, display_name, score, profile_id, sector, industry, any_gate_fail, score_cap, raw_weighted, updated_at'
+  'symbol, display_name, score, forward_growth_score, profile_id, sector, industry, any_gate_fail, score_cap, raw_weighted, updated_at'
+
+type ScreenerSortColumn = 'score' | 'forward_growth_score'
 
 function formatProfileId(id: string): string {
   return id
@@ -35,6 +37,8 @@ export default function ScreenerPage() {
   const [error, setError] = useState<string | null>(null)
   const [filterProfile, setFilterProfile] = useState('')
   const [filterSector, setFilterSector] = useState('')
+  const [sortColumn, setSortColumn] = useState<ScreenerSortColumn>('score')
+  const [sortAscending, setSortAscending] = useState(false)
 
   const [chartModal, setChartModal] = useState<ChartModalState | null>(null)
   const [chartData, setChartData] = useState<PriceChartsPayload | null>(null)
@@ -176,7 +180,10 @@ export default function ScreenerPage() {
       setLoading(true)
       setError(null)
 
-      let q = sb.from('screen_scores').select(LIST_COLUMNS, { count: 'exact' }).order('score', { ascending: false })
+      let q = sb
+        .from('screen_scores')
+        .select(LIST_COLUMNS, { count: 'exact' })
+        .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
       if (filterProfile) q = q.eq('profile_id', filterProfile)
       if (filterSector === '__none__') q = q.or('sector.is.null,sector.eq.')
       else if (filterSector) q = q.eq('sector', filterSector)
@@ -204,7 +211,7 @@ export default function ScreenerPage() {
     return () => {
       cancelled = true
     }
-  }, [page, filterProfile, filterSector])
+  }, [page, filterProfile, filterSector, sortColumn, sortAscending])
 
   const profileOptions = useMemo(() => {
     if (!facetRows?.length) return []
@@ -264,7 +271,8 @@ export default function ScreenerPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-moat-accent-dim">StockMoat</p>
           <h1 className="mt-2 font-display text-3xl md:text-4xl">Nightly screener</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Scores are written by the nightly batch job. Data can be about a day behind the LIVE market. Use{' '}
+            Moat and forward growth (1–10, consensus revenue CAGR over the next three estimate years) are written by
+            the nightly batch job. Data can be about a day behind the LIVE market. Use{' '}
             <span className="font-medium">Chart</span> next to a name for the same precomputed weekly and daily OHLC
             windows as on the home page (served from Supabase after the nightly chart step). The table loads{' '}
             <span className="font-mono">{PAGE_SIZE}</span> rows per page.
@@ -396,6 +404,40 @@ export default function ScreenerPage() {
                   ) : null}
                 </select>
               </div>
+              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
+                <label htmlFor="screener-sort" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Sort by
+                </label>
+                <select
+                  id="screener-sort"
+                  value={sortColumn}
+                  onChange={(e) => {
+                    setSortColumn(e.target.value as ScreenerSortColumn)
+                    setPage(1)
+                  }}
+                  className={`mt-1 ${selectClass}`}
+                >
+                  <option value="score">Moat score</option>
+                  <option value="forward_growth_score">Forward growth</option>
+                </select>
+              </div>
+              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
+                <label htmlFor="screener-sort-dir" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Order
+                </label>
+                <select
+                  id="screener-sort-dir"
+                  value={sortAscending ? 'asc' : 'desc'}
+                  onChange={(e) => {
+                    setSortAscending(e.target.value === 'asc')
+                    setPage(1)
+                  }}
+                  className={`mt-1 ${selectClass}`}
+                >
+                  <option value="desc">Highest first</option>
+                  <option value="asc">Lowest first</option>
+                </select>
+              </div>
               {(filterProfile || filterSector) && (
                 <button
                   type="button"
@@ -449,7 +491,8 @@ export default function ScreenerPage() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/90 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-3 py-3">#</th>
-                    <th className="px-3 py-3">Score</th>
+                    <th className="px-3 py-3">Moat</th>
+                    <th className="px-3 py-3">Fwd growth</th>
                     <th className="px-3 py-3">Ticker</th>
                     <th className="px-3 py-3">Name</th>
                     <th className="px-3 py-3">Chart</th>
@@ -462,7 +505,7 @@ export default function ScreenerPage() {
                 <tbody>
                   {!rows || rows.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
+                      <td colSpan={10} className="px-4 py-10 text-center text-sm text-slate-500">
                         No rows on this page.
                       </td>
                     </tr>
@@ -471,6 +514,9 @@ export default function ScreenerPage() {
                       <tr key={r.symbol} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80">
                         <td className="px-3 py-2.5 text-slate-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
                         <td className="px-3 py-2.5 font-mono font-semibold text-moat-ink">{r.score.toFixed(2)}</td>
+                        <td className="px-3 py-2.5 font-mono font-semibold text-sky-800">
+                          {r.forward_growth_score != null ? r.forward_growth_score : '—'}
+                        </td>
                         <td className="px-3 py-2.5 font-mono font-medium">
                           <Link
                             to={`/?ticker=${encodeURIComponent(r.symbol)}`}

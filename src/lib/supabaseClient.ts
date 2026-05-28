@@ -12,6 +12,8 @@ export interface ScreenScoreRow {
   any_gate_fail: boolean
   score_cap: number | null
   raw_weighted: number | null
+  forward_rev_cagr_3y: number | null
+  forward_growth_score: number | null
   updated_at: string
 }
 
