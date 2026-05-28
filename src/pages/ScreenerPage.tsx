@@ -184,6 +184,7 @@ export default function ScreenerPage() {
         .from('screen_scores')
         .select(LIST_COLUMNS, { count: 'exact' })
         .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
+      if (sortColumn === 'forward_growth_score') q = q.not('forward_growth_score', 'is', null)
       if (filterProfile) q = q.eq('profile_id', filterProfile)
       if (filterSector === '__none__') q = q.or('sector.is.null,sector.eq.')
       else if (filterSector) q = q.eq('sector', filterSector)
@@ -286,9 +287,28 @@ export default function ScreenerPage() {
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{error}</div>
         ) : null}
 
-        {!loading && !error && supabaseClient && totalCount === 0 && !filterProfile && !filterSector ? (
+        {!loading &&
+        !error &&
+        supabaseClient &&
+        totalCount === 0 &&
+        !filterProfile &&
+        !filterSector &&
+        sortColumn !== 'forward_growth_score' ? (
           <p className="text-sm text-slate-600">
             No rows in <span className="font-mono">screen_scores</span> yet. Run the nightly script after creating the table.
+          </p>
+        ) : null}
+
+        {!loading &&
+        !error &&
+        supabaseClient &&
+        totalCount === 0 &&
+        !filterProfile &&
+        !filterSector &&
+        sortColumn === 'forward_growth_score' ? (
+          <p className="text-sm text-slate-600">
+            No forward growth ranks yet. Apply the forward growth migration (<span className="font-mono">npx supabase db push</span>)
+            and rerun the nightly workflow so <span className="font-mono">forward_growth_score</span> is populated.
           </p>
         ) : null}
 
