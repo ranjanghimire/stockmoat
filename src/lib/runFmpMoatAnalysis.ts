@@ -69,6 +69,7 @@ export async function runFmpMoatAnalysis(
     {
       sector: facts.sector,
       industry: facts.industry,
+      headquarters: facts.headquarters,
       dataSource: 'fmp',
       fundamentals: buildMoatFundamentalsSnapshot(facts, pack, peerSnapshot, facts.sector),
       facts,

@@ -76,4 +76,20 @@ describe('buildCompanyFacts', () => {
     const facts = buildCompanyFacts('MRVL', pack)
     expect(facts.pegRatio).toBeCloseTo(2, 4)
   })
+
+  it('formats headquarters from profile city, state, and country', () => {
+    const pack = minimalPack({
+      profile: {
+        companyName: 'Microsoft Corporation',
+        sector: 'Technology',
+        industry: 'Software',
+        city: 'Redmond',
+        state: 'WA',
+        country: 'US',
+      },
+    })
+
+    const facts = buildCompanyFacts('MSFT', pack)
+    expect(facts.headquarters).toBe('Redmond, WA, US')
+  })
 })

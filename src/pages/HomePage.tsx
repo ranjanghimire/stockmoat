@@ -136,6 +136,7 @@ function buildMoatFromPack(
     {
       sector: facts.sector,
       industry: facts.industry,
+      headquarters: facts.headquarters,
       dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
       fundamentals: buildMoatFundamentalsSnapshot(
         facts,
@@ -633,6 +634,7 @@ export default function HomePage() {
               dataSource={analysis.dataSource}
               sector={analysis.sector}
               industry={analysis.industry}
+              headquarters={analysis.headquarters}
               profileMode={profileMode}
               manualProfile={manualProfile}
               onScoringProfileChange={({ mode, manualProfile: mp }) => {

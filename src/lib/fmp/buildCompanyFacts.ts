@@ -1,4 +1,4 @@
-import { industryFromFmpProfile, sectorFromFmpProfile } from './profileClassification'
+import { headquartersFromFmpProfile, industryFromFmpProfile, sectorFromFmpProfile } from './profileClassification'
 import { num, normalizeMarginRatio } from './normalize'
 import type { JsonRecord } from './normalize'
 import type { CompanyRawPack } from './fetchCompanyRawPack'
@@ -21,6 +21,8 @@ export interface CompanyFacts {
   companyName: string
   sector: string
   industry: string
+  /** Formatted HQ location from company profile when available. */
+  headquarters?: string
   mktCap?: number
   price?: number
   priceToTangibleBook?: number
@@ -308,6 +310,7 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
   const companyName = typeof p?.companyName === 'string' ? p.companyName : symbol.toUpperCase()
   const sector = sectorFromFmpProfile(p) ?? sectorFromFmpProfile(q) ?? 'Unknown'
   const industry = industryFromFmpProfile(p) ?? industryFromFmpProfile(q) ?? 'Unknown'
+  const headquarters = headquartersFromFmpProfile(p) ?? headquartersFromFmpProfile(q)
 
   const annualEps = pack.incomeAnnual
     .map((row) => pick(row, ['epsdiluted', 'eps']))
@@ -759,6 +762,7 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     companyName,
     sector,
     industry,
+    headquarters,
     mktCap: marketCap,
     price,
     priceToTangibleBook: (() => {

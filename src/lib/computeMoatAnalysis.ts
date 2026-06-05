@@ -43,6 +43,8 @@ export interface MoatAnalysis {
   pillars: PillarRollup[]
   sector?: string
   industry?: string
+  /** Company headquarters from profile data when available. */
+  headquarters?: string
   dataSource: 'fmp' | 'demo' | 'yahoo_dev'
   /** TTM / BS figures for UI (cash-truth drill-down, etc.). */
   fundamentals?: MoatFundamentalsSnapshot
@@ -63,6 +65,7 @@ export function computeMoatAnalysis(
   meta?: {
     sector?: string
     industry?: string
+    headquarters?: string
     dataSource?: 'fmp' | 'demo' | 'yahoo_dev'
     fundamentals?: MoatFundamentalsSnapshot
     facts?: CompanyFacts
@@ -147,6 +150,7 @@ export function computeMoatAnalysis(
     pillars,
     sector: meta?.sector,
     industry: meta?.industry,
+    headquarters: meta?.headquarters,
     dataSource: meta?.dataSource ?? 'demo',
     fundamentals: meta?.fundamentals,
   }

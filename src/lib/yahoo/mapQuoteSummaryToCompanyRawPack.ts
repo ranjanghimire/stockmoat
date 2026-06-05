@@ -202,6 +202,9 @@ export function mapQuoteSummaryToCompanyRawPack(symbol: string, summary: unknown
     companyName: String(profileMod?.longName ?? priceMod?.longName ?? priceMod?.shortName ?? sym),
     sector: String(profileMod?.sector ?? 'Unknown'),
     industry: String(profileMod?.industry ?? 'Unknown'),
+    city: typeof profileMod?.city === 'string' ? profileMod.city : undefined,
+    state: typeof profileMod?.state === 'string' ? profileMod.state : undefined,
+    country: typeof profileMod?.country === 'string' ? profileMod.country : undefined,
     mktCap,
   }
 

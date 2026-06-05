@@ -56,6 +56,28 @@ export function industryFromFmpProfile(p: JsonRecord | undefined): string | unde
   return firstNonEmptyStringField(p, INDUSTRY_FIELD_KEYS)
 }
 
+const HQ_CITY_KEYS = ['city', 'City'] as const
+const HQ_STATE_KEYS = ['state', 'State', 'stateCode', 'state_code'] as const
+const HQ_COUNTRY_KEYS = ['country', 'Country'] as const
+
+/** Human-readable HQ line from FMP stable/v3 or Yahoo-shaped profile rows (e.g. "Redmond, WA, US"). */
+export function headquartersFromFmpProfile(p: JsonRecord | undefined): string | undefined {
+  if (!p) return undefined
+  const city = firstNonEmptyStringField(p, HQ_CITY_KEYS)
+  const state = firstNonEmptyStringField(p, HQ_STATE_KEYS)
+  const country = firstNonEmptyStringField(p, HQ_COUNTRY_KEYS)
+
+  const parts: string[] = []
+  if (city) parts.push(city)
+  if (state && state.toLowerCase() !== city?.toLowerCase()) parts.push(state)
+  if (country) {
+    const countryLower = country.toLowerCase()
+    if (!parts.some((part) => part.toLowerCase() === countryLower)) parts.push(country)
+  }
+
+  return parts.length > 0 ? parts.join(', ') : undefined
+}
+
 /** Fetch legacy v3 profile when stable row is missing sector or industry (routing + UI need both). */
 export function fmpProfileNeedsLegacyEnrichment(p: JsonRecord | undefined): boolean {
   return sectorFromFmpProfile(p) === undefined || industryFromFmpProfile(p) === undefined

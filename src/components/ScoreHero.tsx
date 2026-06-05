@@ -12,6 +12,7 @@ interface ScoreHeroProps {
   dataSource?: 'fmp' | 'demo' | 'yahoo_dev'
   sector?: string
   industry?: string
+  headquarters?: string
   profileMode?: 'auto' | 'manual'
   manualProfile?: string
   onScoringProfileChange?: (next: { mode: 'auto' | 'manual'; manualProfile: string }) => void
@@ -70,6 +71,7 @@ export function ScoreHero({
   dataSource = 'demo',
   sector,
   industry,
+  headquarters,
   profileMode = 'auto',
   manualProfile = 'consumer_staples_discretionary_general',
   onScoringProfileChange,
@@ -140,6 +142,11 @@ export function ScoreHero({
                 <span className="font-medium text-moat-ink">Price (delayed):</span> <span className="text-slate-500">—</span>
               </>
             )}
+            <br />
+            <span>
+              Headquarters{' '}
+              <span className="font-medium text-moat-ink">{headquarters?.trim() ? headquarters : '—'}</span>
+            </span>
             <br />
             <span className="mt-1 inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span>
