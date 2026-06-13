@@ -1,4 +1,4 @@
-import { loadFairValueConfig } from '../loadFairValueConfig'
+import { getProfileConfig } from '../loadFairValueConfig'
 import { computeMoatQuality, clampProfileQ } from '../core/qualityMultiplier'
 import { ruleOf40Approx } from '../ruleOf40'
 import { clamp } from '../core/fairMultiple'
@@ -11,7 +11,7 @@ import type {
 } from '../types'
 
 function cfg() {
-  return loadFairValueConfig().profiles.software_saas
+  return getProfileConfig('software_saas')
 }
 
 function classifySaasSubProfile(operating: NormalizedOperatingMetrics, facts: FairValueBuildContext['input']['facts']): FairValueSubProfileId {
@@ -39,7 +39,7 @@ function classifySaasSubProfile(operating: NormalizedOperatingMetrics, facts: Fa
 }
 
 function weightsFromConfig(sub: FairValueSubProfileId): Partial<Record<FairValueMethodId, number>> {
-  const subCfg = cfg().sub_profiles[sub]
+  const subCfg = cfg().sub_profiles?.[sub]
   if (!subCfg) return {}
   const map: Partial<Record<FairValueMethodId, number>> = {}
   if (subCfg.ev_gross_profit !== undefined) map.ev_gross_profit = subCfg.ev_gross_profit

@@ -27,6 +27,10 @@ function subProfileLabel(id: string): string {
     semis_mid_cycle: 'Mid-cycle semis',
     semis_peak_cycle: 'Peak cycle (normalized)',
     semis_trough_cycle: 'Trough cycle (normalized)',
+    cyclical_mid: 'Mid-cycle',
+    cyclical_peak: 'Peak cycle (normalized)',
+    cyclical_trough: 'Trough cycle (normalized)',
+    standard: 'Standard valuation',
   }
   return labels[id] ?? id
 }
@@ -49,7 +53,7 @@ export function FairValueCard({ fairValue, marketPrice }: FairValueCardProps) {
         <div>
           <h3 className="font-display text-lg text-moat-ink">Fair value estimate</h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Triangulated from peer multiples and quality adjustment — IT software/SaaS or semis profiles only. Not
+            Triangulated from peer multiples and quality adjustment — methodology varies by sector profile. Not
             buy/sell advice.
           </p>
         </div>

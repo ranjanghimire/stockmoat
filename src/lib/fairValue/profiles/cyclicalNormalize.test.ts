@@ -13,7 +13,7 @@ describe('cyclicalNormalize', () => {
     const margins = annualEbitdaMargins(income, 5)
     expect(margins.length).toBeGreaterThanOrEqual(4)
     const state = detectCyclicalState(0.4, income)
-    expect(state.subProfile).toBe('semis_peak_cycle')
+    expect(state.subProfile).toBe('cyclical_peak')
   })
 
   it('normalizes peak EBITDA down to mid-cycle margin', () => {
@@ -27,7 +27,7 @@ describe('cyclicalNormalize', () => {
       shares: 2e9,
     }
     const cyclical = {
-      subProfile: 'semis_peak_cycle' as const,
+      subProfile: 'cyclical_peak' as const,
       ebitdaMarginTtm: 0.4,
       ebitdaMargin5y: 0.28,
       marginRatio: 1.43,

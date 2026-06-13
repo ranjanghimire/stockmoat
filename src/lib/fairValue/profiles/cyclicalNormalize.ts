@@ -1,8 +1,8 @@
 import type { JsonRecord } from '../../fmp/normalize'
 import { extractEbitdaFromIncome, medianOf } from '../buildContext'
-import type { FairValueSubProfileId, NormalizedOperatingMetrics } from '../types'
 import { clamp } from '../core/fairMultiple'
-import { loadFairValueConfig } from '../loadFairValueConfig'
+import { getProfileConfig } from '../loadFairValueConfig'
+import type { FairValueProfileId, FairValueSubProfileId, NormalizedOperatingMetrics } from '../types'
 
 export interface CyclicalState {
   subProfile: FairValueSubProfileId
@@ -28,19 +28,20 @@ export function annualEbitdaMargins(incomeAnnual: JsonRecord[], maxYears: number
 export function detectCyclicalState(
   ebitdaMarginTtm: number | undefined,
   incomeAnnual: JsonRecord[],
+  profileId: FairValueProfileId = 'semis_hardware',
 ): CyclicalState {
-  const cfg = loadFairValueConfig().profiles.semis_hardware.cyclical!
+  const cfg = getProfileConfig(profileId).cyclical ?? getProfileConfig('semis_hardware').cyclical!
   const margins = annualEbitdaMargins(incomeAnnual, cfg.mid_cycle_years)
   const m5 = medianOf(margins)
 
   if (ebitdaMarginTtm === undefined || m5 === undefined || m5 <= 0) {
-    return { subProfile: 'semis_mid_cycle', ebitdaMarginTtm, ebitdaMargin5y: m5 }
+    return { subProfile: 'cyclical_mid', ebitdaMarginTtm, ebitdaMargin5y: m5 }
   }
 
   const ratio = ebitdaMarginTtm / m5
-  let subProfile: FairValueSubProfileId = 'semis_mid_cycle'
-  if (ratio > cfg.peak_margin_ratio) subProfile = 'semis_peak_cycle'
-  else if (ratio < cfg.trough_margin_ratio || ebitdaMarginTtm <= 0) subProfile = 'semis_trough_cycle'
+  let subProfile: FairValueSubProfileId = 'cyclical_mid'
+  if (ratio > cfg.peak_margin_ratio) subProfile = 'cyclical_peak'
+  else if (ratio < cfg.trough_margin_ratio || ebitdaMarginTtm <= 0) subProfile = 'cyclical_trough'
 
   return { subProfile, ebitdaMarginTtm, ebitdaMargin5y: m5, marginRatio: ratio }
 }
@@ -50,7 +51,7 @@ export function normalizeSemisOperating(
   cyclical: CyclicalState,
 ): NormalizedOperatingMetrics {
   const { subProfile, ebitdaMargin5y, ebitdaMarginTtm } = cyclical
-  if (subProfile === 'semis_mid_cycle' || ebitdaMargin5y === undefined) {
+  if (subProfile === 'cyclical_mid' || ebitdaMargin5y === undefined) {
     return operating
   }
 

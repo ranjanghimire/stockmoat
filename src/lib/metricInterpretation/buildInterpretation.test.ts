@@ -21,7 +21,7 @@ describe('buildMetricInterpretation', () => {
       mode: 'score',
       peer_relative: true,
     })
-    expect(i.verdict).toBe('weak')
+    expect(i.verdict).toBe('poor')
     expect(i.formattedValue).toContain('137.61')
     expect(i.formattedValue).toContain('41.69')
     expect(i.meterPosition).toBeLessThan(0.25)

@@ -78,6 +78,14 @@ export function buildBaseOperatingMetrics(
   const fcfToRevenue =
     fcfTtm !== undefined && revenueTtm > 0 ? fcfTtm / revenueTtm : facts.fcfToRevenueTtm
 
+  const bookValuePerShare =
+    facts.totalEquity !== undefined && facts.totalEquity > 0 ? facts.totalEquity / shares : undefined
+  let tangibleBookPerShare = bookValuePerShare
+  if (facts.priceToTangibleBook !== undefined && facts.priceToTangibleBook > 0 && facts.price !== undefined) {
+    tangibleBookPerShare = facts.price / facts.priceToTangibleBook
+  }
+  const ffoPerShare = facts.ffoPerShare
+
   return {
     revenueTtm,
     grossProfitTtm: grossProfit,
@@ -89,7 +97,42 @@ export function buildBaseOperatingMetrics(
     ebitdaMargin,
     ebitToEbitdaRatio,
     fcfToRevenue,
+    bookValuePerShare,
+    tangibleBookPerShare,
+    ffoPerShare,
     netDebt,
+    shares,
+    enterpriseValue: facts.enterpriseValue,
+  }
+}
+
+/** Equity-only path for financials when revenue is unavailable. */
+export function buildEquityOperatingMetrics(
+  facts: CompanyFacts,
+  incomeAnnual: JsonRecord[],
+): NormalizedOperatingMetrics | null {
+  const shares = extractShares(facts, incomeAnnual)
+  if (shares === undefined || shares <= 0) return null
+
+  const equity = facts.totalEquity
+  if (equity === undefined || equity <= 0) return null
+
+  const bookValuePerShare = equity / shares
+  let tangibleBookPerShare = bookValuePerShare
+  if (facts.priceToTangibleBook !== undefined && facts.priceToTangibleBook > 0 && facts.price !== undefined) {
+    tangibleBookPerShare = facts.price / facts.priceToTangibleBook
+  }
+
+  const totalDebt = facts.totalDebt ?? 0
+  const cash = facts.cashAndEquivalents ?? 0
+
+  return {
+    revenueTtm: facts.revenueTtmAbsolute ?? 0,
+    epsTtm: facts.annualEps[0],
+    bookValuePerShare,
+    tangibleBookPerShare,
+    ffoPerShare: facts.ffoPerShare,
+    netDebt: totalDebt - cash,
     shares,
     enterpriseValue: facts.enterpriseValue,
   }
@@ -137,7 +180,9 @@ export function createInitialContext(
   input: FairValueInput,
   forwardEstimates: ForwardEstimatesSeries | null,
 ): FairValueBuildContext | null {
-  const operating = buildBaseOperatingMetrics(input.facts, input.incomeAnnual)
+  let operating =
+    buildBaseOperatingMetrics(input.facts, input.incomeAnnual) ??
+    buildEquityOperatingMetrics(input.facts, input.incomeAnnual)
   if (!operating) return null
 
   const { fy1, fy2 } = resolveForwardYears(input, forwardEstimates)

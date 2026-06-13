@@ -8,7 +8,8 @@ import {
 import { createInitialContext } from './buildContext'
 import { getFairValueAdapter } from './adapters'
 import { runMethod } from './methods'
-import { cyclicalWarning } from './profiles/semisHardwareAdapter'
+import { cyclicalWarning } from './profiles/createEvCyclicalAdapter'
+import { cyclicalWarning as semisCyclicalWarning } from './profiles/semisHardwareAdapter'
 import type {
   FairValueInput,
   FairValueMethodId,
@@ -34,7 +35,7 @@ export function computeFairValue(input: FairValueInput): FairValueResult | null 
   const weights = adapter.methodWeights(subProfileId)
   const active = adapter.activeMethods(subProfileId)
   const warnings = [...initial.warnings]
-  const cyclicalMsg = cyclicalWarning(subProfileId)
+  const cyclicalMsg = cyclicalWarning(subProfileId) ?? semisCyclicalWarning(subProfileId)
   if (cyclicalMsg) warnings.push(cyclicalMsg)
 
   const peerN = input.peers?.n ?? 0

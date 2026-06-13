@@ -1,4 +1,4 @@
-import { loadFairValueConfig } from '../loadFairValueConfig'
+import { getProfileConfig } from '../loadFairValueConfig'
 import { computeMoatQuality, clampProfileQ } from '../core/qualityMultiplier'
 import { clamp } from '../core/fairMultiple'
 import {
@@ -14,11 +14,11 @@ import type {
 } from '../types'
 
 function cfg() {
-  return loadFairValueConfig().profiles.semis_hardware
+  return getProfileConfig('semis_hardware')
 }
 
 function weightsFromConfig(sub: FairValueSubProfileId): Partial<Record<FairValueMethodId, number>> {
-  const subCfg = cfg().sub_profiles[sub]
+  const subCfg = cfg().sub_profiles?.[sub]
   if (!subCfg) return {}
   const map: Partial<Record<FairValueMethodId, number>> = {}
   if (subCfg.ev_ebitda !== undefined) map.ev_ebitda = subCfg.ev_ebitda
@@ -32,7 +32,7 @@ export const semisHardwareAdapter: FairValueProfileAdapter = {
   id: 'semis_hardware',
 
   classifySubProfile(ctx: FairValueBuildContext): FairValueSubProfileId {
-    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual)
+    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual, 'semis_hardware')
     return cyclical.subProfile
   },
 
@@ -56,11 +56,11 @@ export const semisHardwareAdapter: FairValueProfileAdapter = {
     }
 
     let qCycle = 1
-    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual)
-    if (cyclical.subProfile === 'semis_peak_cycle') {
+    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual, 'semis_hardware')
+    if (cyclical.subProfile === 'cyclical_peak') {
       qCycle = profileCfg.cyclical!.peak_cycle_q
       notes.push('Peak cycle — Q_cycle 0.92')
-    } else if (cyclical.subProfile === 'semis_trough_cycle') {
+    } else if (cyclical.subProfile === 'cyclical_trough') {
       qCycle = profileCfg.cyclical!.trough_cycle_q
       notes.push('Trough cycle — Q_cycle 1.05')
     }
@@ -70,14 +70,14 @@ export const semisHardwareAdapter: FairValueProfileAdapter = {
   },
 
   normalizeOperatingMetrics(ctx: FairValueBuildContext): NormalizedOperatingMetrics {
-    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual)
+    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual, 'semis_hardware')
     return normalizeSemisOperating(ctx.operating, cyclical)
   },
 
   adjustForwardMultiple(_methodId: FairValueMethodId, baseMultiple: number, ctx: FairValueBuildContext): number {
-    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual)
+    const cyclical = detectCyclicalState(ctx.operating.ebitdaMargin, ctx.input.incomeAnnual, 'semis_hardware')
     let mult = baseMultiple
-    if (cyclical.subProfile === 'semis_peak_cycle') {
+    if (cyclical.subProfile === 'cyclical_peak') {
       mult *= 1 - cfg().cyclical!.forward_peak_fade
     }
     const q = ctx.qualityMultiplier
@@ -86,7 +86,7 @@ export const semisHardwareAdapter: FairValueProfileAdapter = {
   },
 
   activeMethods(sub: FairValueSubProfileId): FairValueMethodId[] {
-    if (sub.startsWith('semis_')) {
+    if (sub.startsWith('cyclical_')) {
       return ['ev_ebitda', 'ev_ebit', 'fcf_yield_peer', 'peg_implied_pe']
     }
     return []
@@ -94,10 +94,10 @@ export const semisHardwareAdapter: FairValueProfileAdapter = {
 }
 
 export function cyclicalWarning(sub: FairValueSubProfileId): string | undefined {
-  if (sub === 'semis_peak_cycle') {
+  if (sub === 'cyclical_peak') {
     return 'Semiconductor at cyclical peak — fair value uses mid-cycle normalized EBITDA, not trailing peak earnings.'
   }
-  if (sub === 'semis_trough_cycle') {
+  if (sub === 'cyclical_trough') {
     return 'Semiconductor at cyclical trough — fair value uses mid-cycle normalized EBITDA.'
   }
   return undefined

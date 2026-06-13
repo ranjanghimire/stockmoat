@@ -18,6 +18,7 @@ defaults:
 
 profiles:
   software_saas:
+    template: software_saas
     q_min: 0.80
     q_max: 1.30
     rule_of_40_beta: 0.15
@@ -36,7 +37,6 @@ profiles:
       growth_saas:
         ev_gross_profit: 0.45
         ev_revenue: 0.45
-        pe_overlay: 0.10
       transitional_saas:
         ev_gross_profit: 0.35
         ev_revenue: 0.35
@@ -44,6 +44,7 @@ profiles:
         fcf_yield_own_5y: 0.15
 
   semis_hardware:
+    template: semis_hardware
     q_min: 0.75
     q_max: 1.25
     roic_beta: 0.15
@@ -61,18 +62,238 @@ profiles:
       ev_ebit: 18.0
       fcf_yield: 0.05
     sub_profiles:
-      semis_mid_cycle:
+      cyclical_mid:
         ev_ebitda: 0.364
         ev_ebit: 0.318
         fcf_yield_peer: 0.227
         peg_implied_pe: 0.091
-      semis_peak_cycle:
+      cyclical_peak:
         ev_ebitda: 0.40
         ev_ebit: 0.35
         fcf_yield_peer: 0.15
         peg_implied_pe: 0.10
-      semis_trough_cycle:
+      cyclical_trough:
         ev_ebitda: 0.35
         ev_ebit: 0.30
         fcf_yield_peer: 0.30
         peg_implied_pe: 0.05
+
+  consumer_staples_discretionary_general:
+    template: ev_general
+    q_min: 0.80
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    peg_fair: 1.5
+    sector_anchors:
+      ev_ebitda: 14.0
+      ev_ebit: 18.0
+      fcf_yield: 0.045
+    methods:
+      ev_ebitda: 0.35
+      ev_ebit: 0.25
+      fcf_yield_peer: 0.25
+      peg_implied_pe: 0.15
+
+  healthcare_pharma_medtech_services_tools:
+    template: ev_general
+    q_min: 0.80
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    peg_fair: 1.5
+    sector_anchors:
+      ev_ebitda: 15.0
+      ev_ebit: 19.0
+      fcf_yield: 0.04
+    methods:
+      ev_ebitda: 0.35
+      ev_ebit: 0.30
+      fcf_yield_peer: 0.25
+      peg_implied_pe: 0.10
+
+  industrials_machinery_aerospace_transportation_construction:
+    template: ev_general
+    q_min: 0.80
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    peg_fair: 1.5
+    sector_anchors:
+      ev_ebitda: 13.0
+      ev_ebit: 17.0
+      fcf_yield: 0.045
+    methods:
+      ev_ebitda: 0.35
+      ev_ebit: 0.30
+      fcf_yield_peer: 0.25
+      peg_implied_pe: 0.10
+
+  capital_markets_brokers_asset_managers:
+    template: ev_general
+    q_min: 0.80
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    sector_anchors:
+      ev_ebitda: 12.0
+      ev_ebit: 15.0
+      fcf_yield: 0.05
+    methods:
+      ev_ebitda: 0.30
+      ev_ebit: 0.25
+      fcf_yield_peer: 0.45
+
+  utilities_electric_gas_water:
+    template: ev_general
+    q_min: 0.80
+    q_max: 1.20
+    roic_beta: 0.10
+    roic_anchor_pp: 0.05
+    sector_anchors:
+      ev_ebitda: 11.0
+      ev_ebit: 14.0
+      fcf_yield: 0.05
+    methods:
+      ev_ebitda: 0.44
+      ev_ebit: 0.28
+      fcf_yield_peer: 0.28
+
+  materials_mining_chemicals_paper_packaging:
+    template: ev_cyclical
+    q_min: 0.75
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    peg_fair: 1.5
+    cyclical:
+      peak_margin_ratio: 1.20
+      trough_margin_ratio: 0.75
+      mid_cycle_years: 5
+      peak_cycle_q: 0.92
+      trough_cycle_q: 1.05
+      forward_peak_fade: 0.08
+    sector_anchors:
+      ev_ebitda: 10.0
+      ev_ebit: 14.0
+      fcf_yield: 0.055
+    sub_profiles:
+      cyclical_mid:
+        ev_ebitda: 0.40
+        ev_ebit: 0.30
+        fcf_yield_peer: 0.25
+        peg_implied_pe: 0.05
+      cyclical_peak:
+        ev_ebitda: 0.42
+        ev_ebit: 0.33
+        fcf_yield_peer: 0.15
+        peg_implied_pe: 0.10
+      cyclical_trough:
+        ev_ebitda: 0.35
+        ev_ebit: 0.30
+        fcf_yield_peer: 0.30
+        peg_implied_pe: 0.05
+
+  energy_exploration_production:
+    template: ev_cyclical
+    q_min: 0.75
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    cyclical:
+      peak_margin_ratio: 1.20
+      trough_margin_ratio: 0.75
+      mid_cycle_years: 5
+      peak_cycle_q: 0.92
+      trough_cycle_q: 1.05
+      forward_peak_fade: 0.08
+    sector_anchors:
+      ev_ebitda: 6.0
+      ev_ebit: 8.0
+      fcf_yield: 0.08
+    sub_profiles:
+      cyclical_mid:
+        ev_ebitda: 0.35
+        ev_ebit: 0.30
+        fcf_yield_peer: 0.25
+        fcf_yield_own_5y: 0.10
+      cyclical_peak:
+        ev_ebitda: 0.40
+        ev_ebit: 0.35
+        fcf_yield_peer: 0.15
+        fcf_yield_own_5y: 0.10
+      cyclical_trough:
+        ev_ebitda: 0.30
+        ev_ebit: 0.25
+        fcf_yield_peer: 0.35
+        fcf_yield_own_5y: 0.10
+
+  energy_midstream_integrated_refining:
+    template: ev_cyclical
+    q_min: 0.75
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    cyclical:
+      peak_margin_ratio: 1.20
+      trough_margin_ratio: 0.75
+      mid_cycle_years: 5
+      peak_cycle_q: 0.92
+      trough_cycle_q: 1.05
+      forward_peak_fade: 0.08
+    sector_anchors:
+      ev_ebitda: 9.0
+      ev_ebit: 12.0
+      fcf_yield: 0.07
+    sub_profiles:
+      cyclical_mid:
+        ev_ebitda: 0.45
+        ev_ebit: 0.27
+        fcf_yield_peer: 0.28
+      cyclical_peak:
+        ev_ebitda: 0.48
+        ev_ebit: 0.30
+        fcf_yield_peer: 0.22
+      cyclical_trough:
+        ev_ebitda: 0.40
+        ev_ebit: 0.25
+        fcf_yield_peer: 0.35
+
+  banks_thrifts:
+    template: financials_bank
+    q_min: 0.80
+    q_max: 1.20
+    roe_beta: 0.12
+    roic_anchor_pp: 0.05
+    sector_anchors:
+      price_to_tangible_book: 1.4
+      price_to_book: 1.2
+    methods:
+      price_to_tangible_book: 0.65
+      price_to_book: 0.35
+
+  insurance_general:
+    template: financials_insurance
+    q_min: 0.80
+    q_max: 1.20
+    roe_beta: 0.12
+    roic_anchor_pp: 0.05
+    peg_fair: 1.4
+    sector_anchors:
+      price_to_book: 1.3
+    methods:
+      price_to_book: 0.70
+      peg_implied_pe: 0.30
+
+  reits:
+    template: reit_ffo
+    q_min: 0.80
+    q_max: 1.25
+    sector_anchors:
+      p_ffo: 16.0
+      ev_ebitda: 18.0
+      fcf_yield: 0.05
+    methods:
+      p_ffo: 0.70
+      ev_ebitda: 0.20
+      fcf_yield_peer: 0.10

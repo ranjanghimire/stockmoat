@@ -1,4 +1,4 @@
-import { loadFairValueConfig } from '../loadFairValueConfig'
+import { getProfileConfig } from '../loadFairValueConfig'
 import { fairMultiple, fairYield } from '../core/fairMultiple'
 import { evToPricePerShare, fcfYieldToPrice, peToPrice } from '../core/evBridge'
 import type {
@@ -21,7 +21,7 @@ function skipped(methodId: FairValueMethodId, weight: number, reason: string): F
 }
 
 function anchorFor(profileId: FairValueProfileId, key: string): number {
-  const cfg = loadFairValueConfig().profiles[profileId]
+  const cfg = getProfileConfig(profileId)
   return cfg.sector_anchors[key] ?? 1
 }
 
@@ -237,7 +237,7 @@ export function runFcfYieldOwn5y(ctx: FairValueBuildContext, weight: number): Fa
 export function runPegImpliedPe(ctx: FairValueBuildContext, weight: number): FairValueMethodResult {
   const { operating, input } = ctx
   const eps = operating.epsTtm
-  const pegFair = loadFairValueConfig().profiles.semis_hardware.peg_fair ?? 1.5
+  const pegFair = getProfileConfig(input.profileId).peg_fair ?? 1.5
 
   let growthPct: number | undefined
   if (input.facts.annualEps.length >= 2) {
@@ -285,6 +285,92 @@ export function runEvGrossProfitWithEbitFallback(ctx: FairValueBuildContext, wei
   return gp
 }
 
+export function runPriceToBook(ctx: FairValueBuildContext, weight: number): FairValueMethodResult {
+  const { operating, input } = ctx
+  const bvps = operating.bookValuePerShare
+  if (bvps === undefined || bvps <= 0) {
+    return skipped('price_to_book', weight, 'Book value per share unavailable')
+  }
+  const base = fairMultiple(input.peers?.priceToBook, anchorFor(input.profileId, 'price_to_book'), peerN(ctx))
+  const mult = base * q(ctx)
+  const cfv = peToPrice(bvps, mult)
+
+  let ffv2: number | undefined
+  if (ctx.forwardFy2?.eps !== undefined && ctx.forwardFy2.eps > 0 && operating.epsTtm !== undefined && operating.epsTtm > 0) {
+    const bvps2 = bvps * (ctx.forwardFy2.eps / operating.epsTtm)
+    ffv2 = peToPrice(bvps2, mult)
+  }
+
+  return {
+    methodId: 'price_to_book',
+    status: 'ok',
+    cfvPerShare: cfv,
+    ffv2PerShare: ffv2,
+    weight,
+    effectiveWeight: 0,
+    fairMultiple: mult,
+    qualityMultiplier: q(ctx),
+    notes: [`Fair P/B ${mult.toFixed(2)}×`],
+  }
+}
+
+export function runPriceToTangibleBook(ctx: FairValueBuildContext, weight: number): FairValueMethodResult {
+  const { operating, input } = ctx
+  const tbvps = operating.tangibleBookPerShare
+  if (tbvps === undefined || tbvps <= 0) {
+    return skipped('price_to_tangible_book', weight, 'Tangible book per share unavailable')
+  }
+  const base = fairMultiple(
+    undefined,
+    anchorFor(input.profileId, 'price_to_tangible_book'),
+    peerN(ctx),
+  )
+  const peerPtb = input.peers?.priceToBook
+  const blended = peerPtb !== undefined && peerPtb > 0 ? (base + peerPtb) / 2 : base
+  const mult = blended * q(ctx)
+  const cfv = peToPrice(tbvps, mult)
+
+  return {
+    methodId: 'price_to_tangible_book',
+    status: 'ok',
+    cfvPerShare: cfv,
+    weight,
+    effectiveWeight: 0,
+    fairMultiple: mult,
+    qualityMultiplier: q(ctx),
+    notes: [`Fair P/TBV ${mult.toFixed(2)}×`],
+  }
+}
+
+export function runPFfo(ctx: FairValueBuildContext, weight: number): FairValueMethodResult {
+  const { operating, input } = ctx
+  const ffo = operating.ffoPerShare ?? input.facts.ffoPerShare
+  if (ffo === undefined || ffo <= 0) {
+    return skipped('p_ffo', weight, 'FFO per share unavailable')
+  }
+  const base = fairMultiple(input.peers?.priceToFfo, anchorFor(input.profileId, 'p_ffo'), peerN(ctx))
+  const mult = base * q(ctx)
+  const cfv = peToPrice(ffo, mult)
+
+  let ffv2: number | undefined
+  if (ctx.forwardFy2?.eps !== undefined && ctx.forwardFy2.eps > 0 && operating.epsTtm !== undefined && operating.epsTtm > 0) {
+    const ffo2 = ffo * (ctx.forwardFy2.eps / operating.epsTtm)
+    ffv2 = peToPrice(ffo2, mult)
+  }
+
+  return {
+    methodId: 'p_ffo',
+    status: 'ok',
+    cfvPerShare: cfv,
+    ffv2PerShare: ffv2,
+    weight,
+    effectiveWeight: 0,
+    fairMultiple: mult,
+    qualityMultiplier: q(ctx),
+    notes: [`Fair P/FFO ${mult.toFixed(1)}×`],
+  }
+}
+
 const RUNNERS: Record<
   FairValueMethodId,
   (ctx: FairValueBuildContext, weight: number) => FairValueMethodResult
@@ -297,6 +383,9 @@ const RUNNERS: Record<
   fcf_yield_own_5y: runFcfYieldOwn5y,
   peg_implied_pe: runPegImpliedPe,
   pe_trailing: () => skipped('pe_trailing', 0, 'Not used in v1'),
+  price_to_book: runPriceToBook,
+  price_to_tangible_book: runPriceToTangibleBook,
+  p_ffo: runPFfo,
 }
 
 export function runMethod(

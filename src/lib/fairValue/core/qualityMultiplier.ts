@@ -19,5 +19,6 @@ export function computeMoatQuality(
 
 export function clampProfileQ(q: number, profileId: FairValueProfileId): number {
   const profile = loadFairValueConfig().profiles[profileId]
+  if (!profile) return clamp(q, 0.75, 1.3)
   return clamp(q, profile.q_min, profile.q_max)
 }

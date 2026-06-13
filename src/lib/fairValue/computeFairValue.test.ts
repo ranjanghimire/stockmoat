@@ -118,7 +118,126 @@ describe('computeFairValue', () => {
     })
 
     expect(result).not.toBeNull()
-    expect(result!.subProfileId).toBe('semis_peak_cycle')
+    expect(result!.subProfileId).toBe('cyclical_peak')
     expect(result!.cfv.base).toBeLessThan(180)
+  })
+
+  it('computes CFV for consumer profile (AMZN-like)', () => {
+    const result = computeFairValue({
+      symbol: 'AMZN',
+      facts: saasFacts({
+        symbol: 'AMZN',
+        price: 180,
+        revenueTtmAbsolute: 600e9,
+        fcfTtmAbsolute: 35e9,
+        fcfYield: 0.02,
+        annualRevenue: [600e9, 550e9],
+        annualEps: [3.5, 2.8],
+      }),
+      peers: {
+        n: 10,
+        evToEbitda: 15,
+        evToEbit: 20,
+        fcfYield: 0.03,
+      },
+      moatScore: 7.5,
+      safetyGateFailed: false,
+      forwardEstimates: null,
+      incomeAnnual: [
+        { revenue: 600e9, ebitda: 85e9, operatingIncome: 60e9, weightedAverageShsOutDil: 10.5e9 },
+      ],
+      incomeQuarterly: [],
+      profileId: 'consumer_staples_discretionary_general',
+    })
+
+    expect(result).not.toBeNull()
+    expect(result!.profileId).toBe('consumer_staples_discretionary_general')
+    expect(result!.subProfileId).toBe('standard')
+    expect(result!.cfv.base).toBeGreaterThan(0)
+  })
+
+  it('computes CFV for bank using P/TBV', () => {
+    const result = computeFairValue({
+      symbol: 'JPM',
+      facts: saasFacts({
+        symbol: 'JPM',
+        price: 200,
+        revenueTtmAbsolute: 0,
+        totalEquity: 300e9,
+        priceToTangibleBook: 2.0,
+        annualEps: [18, 16],
+      }),
+      peers: { n: 8, priceToBook: 1.5 },
+      moatScore: 7,
+      safetyGateFailed: false,
+      forwardEstimates: null,
+      incomeAnnual: [{ weightedAverageShsOutDil: 2.9e9 }],
+      incomeQuarterly: [],
+      profileId: 'banks_thrifts',
+    })
+
+    expect(result).not.toBeNull()
+    expect(result!.methods.some((m) => m.methodId === 'price_to_tangible_book' && m.status === 'ok')).toBe(true)
+  })
+
+  it('computes CFV for REIT using P/FFO', () => {
+    const result = computeFairValue({
+      symbol: 'O',
+      facts: saasFacts({
+        symbol: 'O',
+        price: 60,
+        ffoPerShare: 4,
+        revenueTtmAbsolute: 3e9,
+        annualEps: [1.2, 1.1],
+      }),
+      peers: { n: 8, priceToFfo: 15, evToEbitda: 18, fcfYield: 0.05 },
+      moatScore: 7,
+      safetyGateFailed: false,
+      forwardEstimates: null,
+      incomeAnnual: [{ revenue: 3e9, ebitda: 2e9, operatingIncome: 1.5e9, weightedAverageShsOutDil: 700e6 }],
+      incomeQuarterly: [],
+      profileId: 'reits',
+    })
+
+    expect(result).not.toBeNull()
+    expect(result!.methods.some((m) => m.methodId === 'p_ffo' && m.status === 'ok')).toBe(true)
+  })
+
+  it('computes CFV for cyclical energy with peak normalization', () => {
+    const result = computeFairValue({
+      symbol: 'XOM',
+      facts: saasFacts({
+        symbol: 'XOM',
+        price: 110,
+        revenueTtmAbsolute: 350e9,
+        fcfTtmAbsolute: 25e9,
+        fcfYield: 0.055,
+        annualRevenue: [350e9, 280e9],
+        annualEps: [8, 6],
+      }),
+      peers: {
+        n: 10,
+        evToEbitda: 6,
+        evToEbit: 8,
+        fcfYield: 0.07,
+      },
+      moatScore: 6.5,
+      safetyGateFailed: false,
+      forwardEstimates: null,
+      incomeAnnual: [
+        { revenue: 350e9, ebitda: 70e9, operatingIncome: 55e9, weightedAverageShsOutDil: 4.2e9 },
+        { revenue: 280e9, ebitda: 45e9, operatingIncome: 35e9 },
+        { revenue: 260e9, ebitda: 42e9, operatingIncome: 32e9 },
+        { revenue: 250e9, ebitda: 40e9, operatingIncome: 30e9 },
+        { revenue: 240e9, ebitda: 38e9, operatingIncome: 28e9 },
+      ],
+      incomeQuarterly: [],
+      profileId: 'energy_exploration_production',
+    })
+
+    expect(result).not.toBeNull()
+    expect(result!.profileId).toBe('energy_exploration_production')
+    expect(result!.subProfileId).toBe('cyclical_peak')
+    expect(result!.cfv.base).toBeGreaterThan(0)
   })
 })
