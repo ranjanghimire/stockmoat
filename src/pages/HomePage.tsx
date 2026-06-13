@@ -658,15 +658,15 @@ export default function HomePage() {
                 refreshing={homeDataRefreshing}
               />
             ) : null}
-            <KeyTakeawaySection loading={loading} analysis={analysis} />
-            {analysis.fundamentals?.valuation ? (
-              <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
-            ) : null}
             {analysis.fundamentals?.fairValue ? (
               <FairValueCard
                 fairValue={analysis.fundamentals.fairValue}
                 marketPrice={analysis.delayedPrice?.value}
               />
+            ) : null}
+            <KeyTakeawaySection loading={loading} analysis={analysis} />
+            {analysis.fundamentals?.valuation ? (
+              <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
             ) : null}
             <PillarBars
               analysis={analysis}
