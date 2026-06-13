@@ -77,6 +77,16 @@ describe('buildCompanyFacts', () => {
     expect(facts.pegRatio).toBeCloseTo(2, 4)
   })
 
+  it('reconciles shares outstanding with market cap when annual filing is wrong (TSM-like)', () => {
+    const pack = minimalPack({
+      quote: { price: 190, marketCap: 990e9, sharesOutstanding: 5.19e9, currency: 'USD' },
+      incomeAnnual: [{ weightedAverageShsOutDil: 38.7e6, revenue: 90e9, ebitda: 50e9 }],
+    })
+
+    const facts = buildCompanyFacts('TSM', pack)
+    expect(facts.sharesOutstanding).toBeCloseTo(5.19e9, -6)
+  })
+
   it('formats headquarters from profile city, state, and country', () => {
     const pack = minimalPack({
       profile: {

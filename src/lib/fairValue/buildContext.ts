@@ -18,12 +18,26 @@ function pick(row: JsonRecord | undefined, keys: string[]): number | undefined {
 }
 
 export function extractShares(facts: CompanyFacts, incomeAnnual: JsonRecord[]): number | undefined {
+  if (facts.sharesOutstanding !== undefined && facts.sharesOutstanding > 0) {
+    return facts.sharesOutstanding
+  }
+
   const row = incomeAnnual[0]
-  return (
-    pick(row, ['weightedAverageShsOutDil', 'weightedAverageShsOut']) ??
-    (facts.mktCap !== undefined && facts.price !== undefined && facts.price > 0
+  const fromAnnual = pick(row, ['weightedAverageShsOutDil', 'weightedAverageShsOut'])
+  const implied =
+    facts.mktCap !== undefined && facts.price !== undefined && facts.price > 0
       ? facts.mktCap / facts.price
-      : undefined)
+      : undefined
+
+  if (fromAnnual !== undefined && fromAnnual > 0 && implied !== undefined && implied > 0) {
+    const ratio = fromAnnual / implied
+    if (ratio > 2.5 || ratio < 0.4) return implied
+    return fromAnnual
+  }
+
+  return (
+    fromAnnual ??
+    implied
   )
 }
 

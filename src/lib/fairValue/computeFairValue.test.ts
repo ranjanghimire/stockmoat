@@ -209,6 +209,8 @@ describe('computeFairValue', () => {
       facts: saasFacts({
         symbol: 'TSM',
         price: 190,
+        mktCap: 990e9,
+        sharesOutstanding: 990e9 / 190,
         revenueTtmAbsolute: 90e9,
         fcfTtmAbsolute: 20e9,
         fcfYield: 0.02,
@@ -221,17 +223,24 @@ describe('computeFairValue', () => {
       moatScore: 8,
       safetyGateFailed: false,
       forwardEstimates: null,
-      incomeAnnual: [{ revenue: 90e9, ebitda: 50e9, operatingIncome: 38e9, weightedAverageShsOutDil: 5.2e9 }],
+      incomeAnnual: [
+        {
+          revenue: 90e9,
+          ebitda: 50e9,
+          operatingIncome: 38e9,
+          weightedAverageShsOutDil: 38.7e6,
+        },
+      ],
       incomeQuarterly: [],
       profileId: 'semis_hardware',
     })
 
     expect(result).not.toBeNull()
-    const peg = result!.methods.find((m) => m.methodId === 'peg_implied_pe')
-    expect(peg?.status).toBe('ok')
-    expect(peg!.cfvPerShare!).toBeLessThan(600)
-    expect(result!.cfv.base).toBeLessThan(600)
-    expect(result!.cfv.base).toBeGreaterThan(50)
+    const evEbitda = result!.methods.find((m) => m.methodId === 'ev_ebitda')
+    expect(evEbitda?.status).toBe('ok')
+    expect(evEbitda!.cfvPerShare!).toBeLessThan(400)
+    expect(evEbitda!.cfvPerShare!).toBeGreaterThan(50)
+    expect(result!.cfv.base).toBeLessThan(400)
   })
 
   it('computes CFV for cyclical energy with peak normalization', () => {

@@ -2,6 +2,7 @@ import { headquartersFromFmpProfile, industryFromFmpProfile, sectorFromFmpProfil
 import { num, normalizeMarginRatio } from './normalize'
 import type { JsonRecord } from './normalize'
 import type { CompanyRawPack } from './fetchCompanyRawPack'
+import { resolveSharesOutstanding } from './resolveSharesOutstanding'
 
 /** Listing / quote currency for formatting (FMP profile or quote; Yahoo quote after mapping). */
 export function listingCurrencyFromPack(pack: CompanyRawPack): string {
@@ -25,6 +26,8 @@ export interface CompanyFacts {
   headquarters?: string
   mktCap?: number
   price?: number
+  /** Reconciled diluted shares (quote / key metrics / market cap). */
+  sharesOutstanding?: number
   priceToTangibleBook?: number
 
   peTrailing?: number
@@ -442,10 +445,14 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     pick(km, ['revenue', 'totalRevenue'])
   if (revenueTotalUsd === undefined) {
     const rps = pick(km, ['revenuePerShareTTM', 'revenuePerShare'])
-    const sh =
-      pick(km, ['weightedAverageShsOutDil', 'weightedAverageShsOut']) ??
-      pick(incSrc, ['weightedAverageShsOutDil', 'weightedAverageShsOut']) ??
-      pick(incAnnual0, ['weightedAverageShsOutDil', 'weightedAverageShsOut'])
+    const sh = resolveSharesOutstanding({
+      marketCap,
+      price,
+      keyMetricsTtm: km,
+      quote: q,
+      incomeTtm: incTtm,
+      incomeAnnual0: incAnnual0,
+    })
     if (rps !== undefined && sh !== undefined && sh > 0) {
       revenueTotalUsd = rps * sh
     }
@@ -762,6 +769,15 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
 
   const epsGrowthPercent = epsGrowthPercentForPeg(km, r, annualEps, pack.analystEstimates)
 
+  const sharesOutstanding = resolveSharesOutstanding({
+    marketCap,
+    price,
+    keyMetricsTtm: km,
+    quote: q,
+    incomeTtm: incTtm,
+    incomeAnnual0: incAnnual0,
+  })
+
   return {
     symbol: symbol.toUpperCase(),
     companyName,
@@ -770,6 +786,7 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     headquarters,
     mktCap: marketCap,
     price,
+    sharesOutstanding,
     priceToTangibleBook: (() => {
       const px = pick(q, ['price'])
       const tbv = pick(km, ['tangibleBookValuePerShare'])
