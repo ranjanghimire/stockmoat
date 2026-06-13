@@ -12,6 +12,7 @@ import {
   analystRecommendationFromFmpPack,
   type AnalystRecommendationSnapshot,
 } from './fmp/parseAnalystStockRecommendations'
+import type { FairValueSnapshot } from './fairValue/types'
 import type { JsonRecord } from './fmp/normalize'
 import { num } from './fmp/normalize'
 
@@ -108,6 +109,8 @@ export interface MoatFundamentalsSnapshot {
   valuation?: ValuationSummary
   /** Analyst consensus revenue / EPS for upcoming fiscal years (FMP only). */
   forwardGrowth?: ForwardGrowthCharts
+  /** Triangulated fair value (CFV + FFV₂) for supported IT profiles. */
+  fairValue?: FairValueSnapshot
 }
 
 function pickNetIncome(row: JsonRecord): number | undefined {

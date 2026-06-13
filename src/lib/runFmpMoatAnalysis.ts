@@ -8,6 +8,7 @@ import { mapFmpSectorToProfile } from './fmp/mapSectorToProfile'
 import { buildMoatFundamentalsSnapshot } from './moatFundamentalsSnapshot'
 import { loadSectorProfiles } from './loadSectorProfiles'
 import { createLiveMetricEvaluator } from './liveMetricEvaluator'
+import { enrichAnalysisWithFairValue } from './fairValue/enrichAnalysisWithFairValue'
 import { resolveProfileMetrics } from './resolveProfileMetrics'
 
 export interface RunFmpMoatAnalysisOptions {
@@ -59,21 +60,24 @@ export async function runFmpMoatAnalysis(
   const peerSnapshot = peerMedians.n > 0 ? peerMedians : null
   const evaluate = createLiveMetricEvaluator(sym, facts, peerSnapshot)
 
-  return computeMoatAnalysis(
-    sym,
-    facts.companyName,
-    routing.profileId,
-    resolved.metrics,
-    resolved.itVariant,
-    evaluate,
-    {
-      sector: facts.sector,
-      industry: facts.industry,
-      headquarters: facts.headquarters,
-      dataSource: 'fmp',
-      fundamentals: buildMoatFundamentalsSnapshot(facts, pack, peerSnapshot, facts.sector),
-      facts,
-      peers: peerSnapshot,
-    },
+  return enrichAnalysisWithFairValue(
+    computeMoatAnalysis(
+      sym,
+      facts.companyName,
+      routing.profileId,
+      resolved.metrics,
+      resolved.itVariant,
+      evaluate,
+      {
+        sector: facts.sector,
+        industry: facts.industry,
+        headquarters: facts.headquarters,
+        dataSource: 'fmp',
+        fundamentals: buildMoatFundamentalsSnapshot(facts, pack, peerSnapshot, facts.sector),
+        facts,
+        peers: peerSnapshot,
+      },
+    ),
+    { facts, peers: peerSnapshot, pack },
   )
 }

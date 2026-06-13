@@ -1,0 +1,78 @@
+schema: stockmoat/fair_value/1
+
+defaults:
+  peer_weights:
+    n_gte_8: 0.80
+    n_gte_5: 0.65
+    else: 0.40
+  quality:
+    moat_alpha: 0.20
+    moat_center: 5.5
+    moat_min: 0.85
+    moat_max: 1.20
+  bands:
+    multiple_swing: 0.12
+    yield_swing: 0.12
+    q_swing: 0.08
+    thin_peers_extra: 0.05
+
+profiles:
+  software_saas:
+    q_min: 0.80
+    q_max: 1.30
+    rule_of_40_beta: 0.15
+    rule_of_40_anchor: 30
+    sector_anchors:
+      ev_gross_profit: 12.0
+      ev_revenue: 6.0
+      ev_ebit: 25.0
+      fcf_yield: 0.045
+    sub_profiles:
+      profitable_saas:
+        fcf_yield_peer: 0.40
+        fcf_yield_own_5y: 0.20
+        ev_gross_profit: 0.30
+        ev_revenue: 0.10
+      growth_saas:
+        ev_gross_profit: 0.45
+        ev_revenue: 0.45
+        pe_overlay: 0.10
+      transitional_saas:
+        ev_gross_profit: 0.35
+        ev_revenue: 0.35
+        fcf_yield_peer: 0.15
+        fcf_yield_own_5y: 0.15
+
+  semis_hardware:
+    q_min: 0.75
+    q_max: 1.25
+    roic_beta: 0.15
+    roic_anchor_pp: 0.05
+    peg_fair: 1.5
+    cyclical:
+      peak_margin_ratio: 1.20
+      trough_margin_ratio: 0.75
+      mid_cycle_years: 5
+      peak_cycle_q: 0.92
+      trough_cycle_q: 1.05
+      forward_peak_fade: 0.08
+    sector_anchors:
+      ev_ebitda: 14.0
+      ev_ebit: 18.0
+      fcf_yield: 0.05
+    sub_profiles:
+      semis_mid_cycle:
+        ev_ebitda: 0.364
+        ev_ebit: 0.318
+        fcf_yield_peer: 0.227
+        peg_implied_pe: 0.091
+      semis_peak_cycle:
+        ev_ebitda: 0.40
+        ev_ebit: 0.35
+        fcf_yield_peer: 0.15
+        peg_implied_pe: 0.10
+      semis_trough_cycle:
+        ev_ebitda: 0.35
+        ev_ebit: 0.30
+        fcf_yield_peer: 0.30
+        peg_implied_pe: 0.05

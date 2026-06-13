@@ -9,6 +9,7 @@ import {
   writeAnalysisCache,
 } from '../lib/analysisCache'
 import { computeMoatAnalysis, type MoatAnalysis } from '../lib/computeMoatAnalysis'
+import { enrichAnalysisWithFairValue } from '../lib/fairValue/enrichAnalysisWithFairValue'
 import { DEMO_TICKERS } from '../lib/demoTickerMap'
 import { DELAYED_PRICE_SNAPSHOT_TTL_MS } from '../lib/delayedPricePolicy'
 import { isYahooDevProvider, shouldFetchFmpPeerMedians } from '../lib/dataSource'
@@ -50,6 +51,7 @@ import { MoatAnalysisSection } from '../components/MoatAnalysisSection'
 import { BalanceFundamentalCharts } from '../components/BalanceFundamentalCharts'
 import { FundamentalsSummaryCard } from '../components/FundamentalsSummaryCard'
 import { ValuationSnapshotCard } from '../components/ValuationSnapshotCard'
+import { FairValueCard } from '../components/FairValueCard'
 import { ForwardGrowthCharts as ForwardGrowthChartsCard } from '../components/ForwardGrowthCharts'
 import { IncomeFundamentalCharts } from '../components/IncomeFundamentalCharts'
 import { PillarBars } from '../components/PillarBars'
@@ -126,28 +128,31 @@ function buildMoatFromPack(
   const priceSnapshotMs = quoteSnapshotMsFromEdgeMeta(edgeQuoteMeta) ?? savedAt
   const listingCurrency = listingCurrencyFromPack(pack)
 
-  const result = computeMoatAnalysis(
-    sym,
-    facts.companyName,
-    routing.profileId,
-    resolved.metrics,
-    resolved.itVariant,
-    evaluate,
-    {
-      sector: facts.sector,
-      industry: facts.industry,
-      headquarters: facts.headquarters,
-      dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
-      fundamentals: buildMoatFundamentalsSnapshot(
+  const result = enrichAnalysisWithFairValue(
+    computeMoatAnalysis(
+      sym,
+      facts.companyName,
+      routing.profileId,
+      resolved.metrics,
+      resolved.itVariant,
+      evaluate,
+      {
+        sector: facts.sector,
+        industry: facts.industry,
+        headquarters: facts.headquarters,
+        dataSource: useYahoo ? 'yahoo_dev' : 'fmp',
+        fundamentals: buildMoatFundamentalsSnapshot(
+          facts,
+          pack,
+          peerSnapshot,
+          facts.sector,
+          edgeForwardGrowth,
+        ),
         facts,
-        pack,
-        peerSnapshot,
-        facts.sector,
-        edgeForwardGrowth,
-      ),
-      facts,
-      peers: peerSnapshot,
-    },
+        peers: peerSnapshot,
+      },
+    ),
+    { facts, peers: peerSnapshot, pack },
   )
 
   return {
@@ -656,6 +661,12 @@ export default function HomePage() {
             <KeyTakeawaySection loading={loading} analysis={analysis} />
             {analysis.fundamentals?.valuation ? (
               <ValuationSnapshotCard valuation={analysis.fundamentals.valuation} />
+            ) : null}
+            {analysis.fundamentals?.fairValue ? (
+              <FairValueCard
+                fairValue={analysis.fundamentals.fairValue}
+                marketPrice={analysis.delayedPrice?.value}
+              />
             ) : null}
             <PillarBars
               analysis={analysis}
