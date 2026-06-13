@@ -117,6 +117,9 @@ export interface CompanyFacts {
   /** FCF / revenue TTM and own historical median (annual statements; proxy for “own FCF yield history”). */
   fcfToRevenueTtm?: number
   fcfToRevenueMedian5y?: number
+
+  /** EPS growth % for PEG (FMP TTM / analyst / capped YoY fallback). */
+  epsGrowthPercent?: number
 }
 
 function pick(o: JsonRecord | undefined, keys: string[]): number | undefined {
@@ -757,6 +760,8 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     pegRatio = computePegFallback(peTrailing, km, r, annualEps, pack.analystEstimates)
   }
 
+  const epsGrowthPercent = epsGrowthPercentForPeg(km, r, annualEps, pack.analystEstimates)
+
   return {
     symbol: symbol.toUpperCase(),
     companyName,
@@ -835,5 +840,6 @@ export function buildCompanyFacts(symbol: string, pack: CompanyRawPack): Company
     nonPerformingLoansRatio,
     fcfToRevenueTtm,
     fcfToRevenueMedian5y,
+    epsGrowthPercent,
   }
 }

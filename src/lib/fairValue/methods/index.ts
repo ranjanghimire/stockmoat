@@ -1,5 +1,6 @@
 import { getProfileConfig } from '../loadFairValueConfig'
 import { fairMultiple, fairYield } from '../core/fairMultiple'
+import { resolvePegGrowthPercent, MAX_PEG_GROWTH_PCT, MIN_PEG_GROWTH_PCT } from '../core/pegGrowth'
 import { evToPricePerShare, fcfYieldToPrice, peToPrice } from '../core/evBridge'
 import type {
   FairValueBuildContext,
@@ -239,27 +240,36 @@ export function runPegImpliedPe(ctx: FairValueBuildContext, weight: number): Fai
   const eps = operating.epsTtm
   const pegFair = getProfileConfig(input.profileId).peg_fair ?? 1.5
 
-  let growthPct: number | undefined
-  if (input.facts.annualEps.length >= 2) {
-    const e0 = input.facts.annualEps[0]!
-    const e1 = input.facts.annualEps[1]!
-    if (e0 > 0 && e1 > 0) growthPct = ((e0 - e1) / e1) * 100
-  }
-  if (growthPct === undefined && input.facts.pegRatio !== undefined && input.facts.peTrailing !== undefined) {
-    growthPct = input.facts.peTrailing / input.facts.pegRatio
-  }
-
-  if (eps === undefined || eps <= 0 || growthPct === undefined || growthPct <= 0) {
+  const rawGrowth = resolvePegGrowthPercent(input.facts)
+  if (eps === undefined || eps <= 0 || rawGrowth === undefined) {
     return skipped('peg_implied_pe', weight, 'PEG method needs positive EPS and growth')
   }
+
+  const growthPct = rawGrowth
+  const growthCapped =
+    input.facts.epsGrowthPercent !== undefined &&
+    input.facts.epsGrowthPercent > MAX_PEG_GROWTH_PCT
+      ? true
+      : input.facts.annualEps.length >= 2 &&
+        (() => {
+          const e0 = input.facts.annualEps[0]!
+          const e1 = input.facts.annualEps[1]!
+          return e0 > 0 && e1 > 0 && e0 > e1 && ((e0 - e1) / e1) * 100 > MAX_PEG_GROWTH_PCT
+        })()
 
   const fairPe = pegFair * growthPct * q(ctx)
   const cfv = peToPrice(eps, fairPe)
 
   let ffv2: number | undefined
   if (ctx.forwardFy2?.eps !== undefined && ctx.forwardFy2.eps > 0 && ctx.forwardFy1?.eps !== undefined && ctx.forwardFy1.eps > 0) {
-    const gFwd = ((ctx.forwardFy2.eps - ctx.forwardFy1.eps) / ctx.forwardFy1.eps) * 100
+    const gFwdRaw = ((ctx.forwardFy2.eps - ctx.forwardFy1.eps) / ctx.forwardFy1.eps) * 100
+    const gFwd = Math.min(Math.max(gFwdRaw, MIN_PEG_GROWTH_PCT), MAX_PEG_GROWTH_PCT)
     if (gFwd > 0) ffv2 = peToPrice(ctx.forwardFy2.eps, pegFair * gFwd * q(ctx))
+  }
+
+  const notes = [`PEG-implied fair P/E ${fairPe.toFixed(1)}× (growth ${growthPct.toFixed(1)}%)`]
+  if (growthCapped) {
+    notes.push(`EPS growth capped at ${MAX_PEG_GROWTH_PCT}% for fair value (raw YoY was extreme)`)
   }
 
   return {
@@ -271,7 +281,7 @@ export function runPegImpliedPe(ctx: FairValueBuildContext, weight: number): Fai
     effectiveWeight: 0,
     fairMultiple: fairPe,
     qualityMultiplier: q(ctx),
-    notes: [`PEG-implied fair P/E ${fairPe.toFixed(1)}× (growth ${growthPct.toFixed(1)}%)`],
+    notes,
   }
 }
 

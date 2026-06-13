@@ -203,6 +203,37 @@ describe('computeFairValue', () => {
     expect(result!.methods.some((m) => m.methodId === 'p_ffo' && m.status === 'ok')).toBe(true)
   })
 
+  it('caps semis PEG when YoY EPS growth is extreme (TSM-like)', () => {
+    const result = computeFairValue({
+      symbol: 'TSM',
+      facts: saasFacts({
+        symbol: 'TSM',
+        price: 190,
+        revenueTtmAbsolute: 90e9,
+        fcfTtmAbsolute: 20e9,
+        fcfYield: 0.02,
+        annualRevenue: [90e9, 75e9],
+        annualEps: [6.5, 0.32],
+        pegRatio: 0.05,
+        peTrailing: 29,
+      }),
+      peers: { n: 10, evToEbitda: 14, evToEbit: 18, fcfYield: 0.04 },
+      moatScore: 8,
+      safetyGateFailed: false,
+      forwardEstimates: null,
+      incomeAnnual: [{ revenue: 90e9, ebitda: 50e9, operatingIncome: 38e9, weightedAverageShsOutDil: 5.2e9 }],
+      incomeQuarterly: [],
+      profileId: 'semis_hardware',
+    })
+
+    expect(result).not.toBeNull()
+    const peg = result!.methods.find((m) => m.methodId === 'peg_implied_pe')
+    expect(peg?.status).toBe('ok')
+    expect(peg!.cfvPerShare!).toBeLessThan(600)
+    expect(result!.cfv.base).toBeLessThan(600)
+    expect(result!.cfv.base).toBeGreaterThan(50)
+  })
+
   it('computes CFV for cyclical energy with peak normalization', () => {
     const result = computeFairValue({
       symbol: 'XOM',
