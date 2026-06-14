@@ -25,8 +25,8 @@ import { buildNightlySymbolPlan } from '../lib/nightly/buildNightlySymbolPlan'
 import { fetchNightlyDbContext } from '../lib/nightly/fetchNightlyDbContext'
 import { fetchFmpTrendingSymbols } from '../lib/fmp/fetchFmpTrendingMovers'
 import { fetchScreenUniverse } from '../lib/fmp/fetchScreenUniverse'
-import { forwardRevenueCagrFromCharts } from '../lib/fmp/forwardRevenueGrowthScore'
 import { recomputeForwardGrowthPercentiles } from '../lib/fmp/recomputeForwardGrowthPercentiles'
+import { buildScreenScoreUpsert } from '../lib/screen/buildScreenScoreUpsert'
 import { runFmpMoatAnalysis } from '../lib/runFmpMoatAnalysis'
 
 loadDotenv({ path: '.env.local' })
@@ -119,24 +119,8 @@ async function main(): Promise<void> {
     process.stdout.write(`[${i + 1}/${symbols.length}] ${sym} … `)
     try {
       const analysis = await runFmpMoatAnalysis(sym, fmpKey)
-      const forwardRevCagr = forwardRevenueCagrFromCharts(analysis.fundamentals?.forwardGrowth)
-      const { error } = await sb.from('screen_scores').upsert(
-        {
-          symbol: analysis.ticker,
-          display_name: analysis.displayName,
-          score: analysis.score,
-          profile_id: analysis.profileId,
-          sector: analysis.sector ?? null,
-          industry: analysis.industry ?? null,
-          any_gate_fail: analysis.anyGateFail,
-          score_cap: analysis.scoreCap,
-          raw_weighted: analysis.rawWeighted,
-          forward_rev_cagr_3y: forwardRevCagr ?? null,
-          forward_growth_score: null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'symbol' },
-      )
+      const row = buildScreenScoreUpsert(analysis)
+      const { error } = await sb.from('screen_scores').upsert(row, { onConflict: 'symbol' })
       if (error) throw new Error(error.message)
       console.log(`score ${analysis.score.toFixed(2)}`)
       ok++

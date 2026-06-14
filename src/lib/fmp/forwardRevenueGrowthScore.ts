@@ -52,6 +52,14 @@ export function forwardRevenueCagrFromCharts(
   return forwardRevenueCagrFromWindow(window)
 }
 
+/** Strictly increasing revenue across the three forward estimate years (R1 < R2 < R3). */
+export function isForwardRevenueMonotonic(charts: ForwardGrowthCharts | null | undefined): boolean {
+  const window = extractForwardRevenueEstimateWindow(charts)
+  if (!window) return false
+  const [r1, r2, r3] = window.revenuesUsd
+  return r1 < r2 && r2 < r3
+}
+
 /**
  * Map raw CAGR values to 1–10 via percentile ranks across the screener universe.
  * Equal CAGR → equal score. Highest CAGR → 10.

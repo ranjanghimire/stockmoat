@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PriceChartsPanel } from '../components/PriceChartsPanel'
+import { ScreenerFilters } from '../components/ScreenerFilters'
 import { ScreenerSortableHeader, type ScreenerSortableColumn } from '../components/ScreenerSortableHeader'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { formatNextEarningsDisplay } from '../lib/fmp/fetchFmpNextEarningsDate'
 import { fetchForwardGrowthCagrUniverse, percentileForwardGrowthScores } from '../lib/fmp/forwardRevenueGrowthScore'
+import { applyScreenerFilters } from '../lib/screen/applyScreenerFilters'
+import {
+  EMPTY_SCREENER_FILTERS,
+  screenerFiltersActive,
+  type ScreenerFilters as ScreenerFiltersState,
+} from '../lib/screen/screenerFilterTypes'
 import {
   getSupabaseBrowserClient,
   type ScreenChartRow,
@@ -60,8 +68,8 @@ export default function ScreenerPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filterProfile, setFilterProfile] = useState('')
-  const [filterSector, setFilterSector] = useState('')
+  const [filters, setFilters] = useState<ScreenerFiltersState>(EMPTY_SCREENER_FILTERS)
+  const debouncedFilters = useDebouncedValue(filters, 300)
   const [sortColumn, setSortColumn] = useState<ScreenerSortableColumn | null>(null)
   const [sortAscending, setSortAscending] = useState(false)
 
@@ -75,6 +83,16 @@ export default function ScreenerPage() {
   const [chartLoadState, setChartLoadState] = useState<'idle' | 'loading' | 'done'>('idle')
   const [chartQueryError, setChartQueryError] = useState<string | null>(null)
   const chartRequestId = useRef(0)
+
+  const patchFilters = useCallback((patch: Partial<ScreenerFiltersState>) => {
+    setFilters((prev) => ({ ...prev, ...patch }))
+    setPage(1)
+  }, [])
+
+  const clearFilters = useCallback(() => {
+    setFilters(EMPTY_SCREENER_FILTERS)
+    setPage(1)
+  }, [])
 
   const closeChart = useCallback(() => {
     chartRequestId.current += 1
@@ -241,20 +259,19 @@ export default function ScreenerPage() {
       const orderCol = dbOrderColumn(sortColumn)
       const ascending = sortColumn ? sortAscending : true
 
-      let q = sb
+      // Supabase PostgrestFilterBuilder generics recurse too deeply for chained filters.
+      let q: any = sb
         .from(SCREENER_TABLE)
         .select(LIST_COLUMNS, { count: 'exact' })
         .order(orderCol, { ascending, nullsFirst: false })
 
       if (sortColumn === 'forward_growth_score') q = q.not('forward_rev_cagr_3y', 'is', null)
-      if (filterProfile) q = q.eq('profile_id', filterProfile)
-      if (filterSector === '__none__') q = q.or('sector.is.null,sector.eq.')
-      else if (filterSector) q = q.eq('sector', filterSector)
+      q = applyScreenerFilters(q, debouncedFilters)
 
       const from = (page - 1) * PAGE_SIZE
       const to = from + PAGE_SIZE - 1
 
-      void q.range(from, to).then(({ data, error: qErr, count }) => {
+      void q.range(from, to).then(({ data, error: qErr, count }: { data: unknown; error: { message: string; code?: string } | null; count: number | null }) => {
         if (cancelled) return
         setLoading(false)
         if (qErr) {
@@ -278,7 +295,7 @@ export default function ScreenerPage() {
     return () => {
       cancelled = true
     }
-  }, [page, filterProfile, filterSector, sortColumn, sortAscending])
+  }, [page, debouncedFilters, sortColumn, sortAscending])
 
   const profileOptions = useMemo(() => {
     if (!facetRows?.length) return []
@@ -301,23 +318,17 @@ export default function ScreenerPage() {
   useEffect(() => {
     if (!facetRows) return
     const id = window.setTimeout(() => {
-      if (filterProfile && !profileOptions.includes(filterProfile)) {
-        setFilterProfile('')
-        setPage(1)
+      if (filters.profile && !profileOptions.includes(filters.profile)) {
+        patchFilters({ profile: '' })
       }
-      if (filterSector === '__none__' && !hasEmptySector) {
-        setFilterSector('')
-        setPage(1)
-      } else if (filterSector && filterSector !== '__none__' && !sectorList.includes(filterSector)) {
-        setFilterSector('')
-        setPage(1)
+      if (filters.sector === '__none__' && !hasEmptySector) {
+        patchFilters({ sector: '' })
+      } else if (filters.sector && filters.sector !== '__none__' && !sectorList.includes(filters.sector)) {
+        patchFilters({ sector: '' })
       }
     }, 0)
     return () => window.clearTimeout(id)
-  }, [facetRows, filterProfile, filterSector, profileOptions, sectorList, hasEmptySector])
-
-  const selectClass =
-    'w-full min-w-[10rem] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-moat-ink shadow-inner outline-none focus:ring-2 focus:ring-moat-accent/30 md:max-w-xs'
+  }, [facetRows, filters.profile, filters.sector, profileOptions, sectorList, hasEmptySector, patchFilters])
 
   const chartsPanelError =
     chartLoadState === 'done' ? chartQueryError ?? chartRowMeta?.fetch_error ?? null : null
@@ -330,6 +341,7 @@ export default function ScreenerPage() {
   const rowEnd = Math.min(page * PAGE_SIZE, totalCount)
 
   const supabaseClient = getSupabaseBrowserClient()
+  const filtersActive = screenerFiltersActive(filters)
 
   return (
     <div className="min-h-dvh text-moat-ink">
@@ -338,26 +350,37 @@ export default function ScreenerPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-moat-accent-dim">StockMoat</p>
           <h1 className="mt-2 font-display text-3xl md:text-4xl">Nightly screener</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Moat and forward growth (1–10, consensus revenue CAGR over the next three estimate years) are written by
-            the nightly batch job. Data can be about a day behind the LIVE market. Click a column header to sort
-            (descending, ascending, then reset). Use <span className="font-medium">Chart</span> for precomputed OHLC
-            windows. The table loads <span className="font-mono">{PAGE_SIZE}</span> rows per page.
+            Scores, pillar filters, market cap, future fair value (FFV₂), and forward revenue patterns are written by
+            the nightly batch job. Data can be about a day behind the live market. All filters are optional — leave
+            sliders at <span className="font-medium">Any</span> to ignore them. Click a column header to sort
+            (descending, ascending, then reset). The table loads{' '}
+            <span className="font-mono">{PAGE_SIZE}</span> rows per page.
           </p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl space-y-4 px-4 py-8">
         {loading ? <p className="text-sm text-slate-500">Loading scores…</p> : null}
         {error ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{error}</div>
+        ) : null}
+
+        {supabaseClient && !error ? (
+          <ScreenerFilters
+            filters={filters}
+            onChange={patchFilters}
+            onClear={clearFilters}
+            profileOptions={profileOptions}
+            sectorList={sectorList}
+            hasEmptySector={hasEmptySector}
+          />
         ) : null}
 
         {!loading &&
         !error &&
         supabaseClient &&
         totalCount === 0 &&
-        !filterProfile &&
-        !filterSector &&
+        !filtersActive &&
         sortColumn !== 'forward_growth_score' ? (
           <p className="text-sm text-slate-600">
             No rows in <span className="font-mono">screen_scores</span> yet. Run the nightly script after creating the table.
@@ -368,140 +391,20 @@ export default function ScreenerPage() {
         !error &&
         supabaseClient &&
         totalCount === 0 &&
-        !filterProfile &&
-        !filterSector &&
+        !filtersActive &&
         sortColumn === 'forward_growth_score' ? (
           <p className="text-sm text-slate-600">
-            No forward growth data yet. Rerun the nightly workflow so <span className="font-mono">forward_rev_cagr_3y</span> is populated.
+            No forward growth data yet. Rerun the nightly workflow so{' '}
+            <span className="font-mono">forward_rev_cagr_3y</span> is populated.
           </p>
         ) : null}
 
-        {!loading && !error && supabaseClient && totalCount === 0 && (filterProfile || filterSector) ? (
-          <div className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm backdrop-blur sm:flex-row sm:flex-wrap sm:items-end">
-              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
-                <label htmlFor="screener-profile" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Profile
-                </label>
-                <select
-                  id="screener-profile"
-                  value={filterProfile}
-                  onChange={(e) => {
-                    setFilterProfile(e.target.value)
-                    setPage(1)
-                  }}
-                  className={`mt-1 ${selectClass}`}
-                >
-                  <option value="">All profiles</option>
-                  {profileOptions.map((id) => (
-                    <option key={id} value={id}>
-                      {formatProfileId(id)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
-                <label htmlFor="screener-sector" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Sector
-                </label>
-                <select
-                  id="screener-sector"
-                  value={filterSector}
-                  onChange={(e) => {
-                    setFilterSector(e.target.value)
-                    setPage(1)
-                  }}
-                  className={`mt-1 ${selectClass}`}
-                >
-                  <option value="">All sectors</option>
-                  {sectorList.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                  {hasEmptySector ? (
-                    <option value="__none__">No sector</option>
-                  ) : null}
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterProfile('')
-                  setFilterSector('')
-                  setPage(1)
-                }}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                Clear filters
-              </button>
-            </div>
-            <p className="text-sm text-slate-600">No rows match the selected filters.</p>
-          </div>
+        {!loading && !error && supabaseClient && totalCount === 0 && filtersActive ? (
+          <p className="text-sm text-slate-600">No rows match the selected filters.</p>
         ) : null}
 
         {!loading && !error && supabaseClient && totalCount > 0 ? (
-          <div className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm backdrop-blur sm:flex-row sm:flex-wrap sm:items-end">
-              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
-                <label htmlFor="screener-profile" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Profile
-                </label>
-                <select
-                  id="screener-profile"
-                  value={filterProfile}
-                  onChange={(e) => {
-                    setFilterProfile(e.target.value)
-                    setPage(1)
-                  }}
-                  className={`mt-1 ${selectClass}`}
-                >
-                  <option value="">All profiles</option>
-                  {profileOptions.map((id) => (
-                    <option key={id} value={id}>
-                      {formatProfileId(id)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="min-w-0 flex-1 sm:max-w-[14rem]">
-                <label htmlFor="screener-sector" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Sector
-                </label>
-                <select
-                  id="screener-sector"
-                  value={filterSector}
-                  onChange={(e) => {
-                    setFilterSector(e.target.value)
-                    setPage(1)
-                  }}
-                  className={`mt-1 ${selectClass}`}
-                >
-                  <option value="">All sectors</option>
-                  {sectorList.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                  {hasEmptySector ? (
-                    <option value="__none__">No sector</option>
-                  ) : null}
-                </select>
-              </div>
-              {(filterProfile || filterSector) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterProfile('')
-                    setFilterSector('')
-                    setPage(1)
-                  }}
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
+          <>
             <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <p>
                 Rows <span className="font-mono font-medium text-moat-ink">{rowStart}</span>
@@ -656,7 +559,7 @@ export default function ScreenerPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </>
         ) : null}
       </main>
 

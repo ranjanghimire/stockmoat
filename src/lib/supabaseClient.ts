@@ -6,6 +6,14 @@ export interface ScreenScoreRow {
   symbol: string
   display_name: string
   score: number
+  valuation_score: number | null
+  quality_score: number | null
+  balance_sheet_score: number | null
+  cash_truth_score: number | null
+  stability_score: number | null
+  market_cap_usd: number | null
+  ffv2_price_ratio: number | null
+  upside_to_ffv2_pct: number | null
   profile_id: string
   sector: string | null
   industry: string | null
@@ -14,6 +22,7 @@ export interface ScreenScoreRow {
   raw_weighted: number | null
   forward_rev_cagr_3y: number | null
   forward_growth_score: number | null
+  forward_rev_monotonic_3y: boolean | null
   updated_at: string
 }
 

@@ -4,6 +4,7 @@ import {
   extractForwardRevenueEstimateWindow,
   forwardRevenueCagrFromCharts,
   forwardRevenueCagrFromWindow,
+  isForwardRevenueMonotonic,
   percentileForwardGrowthScores,
 } from './forwardRevenueGrowthScore'
 
@@ -68,5 +69,29 @@ describe('forwardRevenueGrowthScore', () => {
     ])
     expect(scores.get('LOW')).toBeLessThan(scores.get('HIGH')!)
     expect(scores.get('HIGH')).toBe(10)
+  })
+
+  it('isForwardRevenueMonotonic returns true for strictly rising estimates', () => {
+    expect(isForwardRevenueMonotonic(chartsWithEstimates([2027, 2028, 2029], [100, 121, 146]))).toBe(true)
+  })
+
+  it('isForwardRevenueMonotonic returns false when middle year dips', () => {
+    expect(isForwardRevenueMonotonic(chartsWithEstimates([2027, 2028, 2029], [100, 121, 120]))).toBe(false)
+  })
+
+  it('isForwardRevenueMonotonic returns false when a year is flat', () => {
+    expect(isForwardRevenueMonotonic(chartsWithEstimates([2027, 2028, 2029], [100, 100, 110]))).toBe(false)
+  })
+
+  it('isForwardRevenueMonotonic returns false when estimate years are not consecutive', () => {
+    const charts: ForwardGrowthCharts = {
+      symbol: 'X',
+      points: [
+        { fiscalYear: 2027, label: 'FY2027', kind: 'estimate', revenueUsd: 1 },
+        { fiscalYear: 2029, label: 'FY2029', kind: 'estimate', revenueUsd: 2 },
+        { fiscalYear: 2030, label: 'FY2030', kind: 'estimate', revenueUsd: 3 },
+      ],
+    }
+    expect(isForwardRevenueMonotonic(charts)).toBe(false)
   })
 })
