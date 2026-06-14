@@ -36,7 +36,10 @@ create index if not exists screen_scores_forward_rev_monotonic_3y
   on public.screen_scores (forward_rev_monotonic_3y)
   where forward_rev_monotonic_3y = true;
 
-create or replace view public.screen_screener_list
+-- Postgres cannot reorder/rename view columns via CREATE OR REPLACE VIEW.
+drop view if exists public.screen_screener_list;
+
+create view public.screen_screener_list
 with (security_invoker = true) as
 select
   s.symbol,
