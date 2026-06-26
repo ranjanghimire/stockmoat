@@ -10,8 +10,9 @@
 name: Nightly screen
 
 on:
-  schedule:
-    - cron: '15 7 * * *'
+  # Scheduled runs disabled — on-demand only via workflow_dispatch until production.
+  # schedule:
+  #   - cron: '15 7 * * *'
   workflow_dispatch:
 
 jobs:

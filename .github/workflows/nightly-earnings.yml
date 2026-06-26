@@ -9,8 +9,9 @@
 name: Nightly earnings
 
 on:
-  schedule:
-    - cron: '30 8 * * *'
+  # Scheduled runs disabled — on-demand only via workflow_dispatch until production.
+  # schedule:
+  #   - cron: '30 8 * * *'
   workflow_dispatch:
 
 jobs:
