@@ -11,9 +11,10 @@
 name: Nightly charts
 
 on:
-  schedule:
-    - cron: '0 8 * * *'
-    - cron: '0 20 * * *'
+  # Scheduled runs disabled — on-demand only via workflow_dispatch until production.
+  # schedule:
+  #   - cron: '0 8 * * *'
+  #   - cron: '0 20 * * *'
   workflow_dispatch:
 
 jobs:
